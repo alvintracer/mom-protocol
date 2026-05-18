@@ -1,4 +1,6 @@
-# MOM Event Attention SocialFi 개발 가이던스
+# momment. Event Attention SocialFi 개발 가이던스
+
+> 최신 네이밍 규칙: 서비스명은 `momment.`이고 심볼은 `MOM`이다. 사용자에게 보이는 브랜드명은 `momment.`를 사용한다. 단, `MOM Energy`, `MOM 포인트`, 토큰 심볼, 컨트랙트명처럼 심볼을 의미하는 표현은 `MOM`을 유지한다. 신규 UI는 한국어/영어/스페인어 언어팩 기반으로 작성하고 모바일 웹 뷰를 항상 우선 고려한다. 상세 규칙은 `docs/moment_Product_Implementation_Rules.md`를 따른다.
 
 문서 버전: v0.1  
 작성 목적: Codex/개발팀이 MOM 플랫폼 MVP를 바로 설계·구현할 수 있도록 제품 개념, 수익 모델, AIO 오라클 구조, 데이터 모델, 화면, API, 개발 우선순위를 정리한다.  
@@ -368,6 +370,77 @@ Impression / Click Tracking
 Campaign Period
 Ad Review
 Revenue Accounting
+```
+
+---
+
+### 4.7 hCaptcha + HMT (봇 방지 + 소액 수익)
+
+유저의 주요 액션(AIO 제출, 어텐션 빌드, 포스트 작성)에 hCaptcha 검증을 넣어 봇을 방지하고, Human Protocol(HMT) 토큰 수익을 플랫폼 지갑으로 받는다.
+
+핵심 원칙:
+
+```txt
+HMT 수익은 개별 유저에게 직접 지급하지 않는다.
+모든 수익은 플랫폼 지갑으로 귀속 → Reward Pool에 편입 → Contribution Ratio로 분배.
+```
+
+적용 범위:
+
+```txt
+항상 적용: AIO 결과 제출, AIO 챌린지, 어텐션 빌드
+조건부 적용: 포스트 작성 (신규 유저, 빈도 초과, 저활동 계정)
+미적용: 댓글, 좋아요, 예측 참여
+```
+
+수익 플로우:
+
+```txt
+유저 captcha 풀이 → hCaptcha가 AI 라벨링 데이터로 활용
+→ Human Protocol에서 HMT 토큰 보상
+→ 플랫폼 지갑(Polygon)으로 입금
+→ 월 1회 정산: HMT → USDC 환전
+→ Reward Pool에 편입
+→ Contribution Ratio 기반 분배
+```
+
+상세 아키텍처: `docs/moment_hCaptcha_HMT_Architecture.md` 참조
+
+개발 요구사항:
+
+```txt
+CaptchaGate 컴포넌트 (구현 완료)
+서버 검증 API /api/captcha/verify (구현 완료)
+captcha_verifications 테이블 (마이그레이션 작성 완료)
+platform_hmt_revenue 테이블 (마이그레이션 작성 완료)
+Smart Captcha 조건 로직 (포스트 작성용, 미구현)
+정산 자동화 스크립트 (미구현)
+```
+
+---
+
+### 4.8 디스플레이 광고 (AdSense / Brave / Adshares)
+
+자체 광고 슬롯이 미판매 상태일 때 폴백으로 외부 광고 네트워크를 노출한다.
+
+```txt
+광고 우선순위:
+1순위: 자체 캠페인 (ad_campaigns에서 active + 예산 잔여)
+2순위: Google AdSense (범용 폴백)
+3순위: Brave/Adshares (Web3 광고주, 크립토 어텐션에 적합)
+4순위: 빈 슬롯 → 자체 프로모션 또는 숨김
+```
+
+---
+
+### 4.9 AI 라벨링 데이터 판매
+
+Evidence + LLM Verification 데이터를 구조화하여 AI 학습 데이터로 판매한다.
+
+```txt
+유저 Evidence 제출 → LLM 검증 → 품질 점수 태깅
+→ 데이터 익스포트 파이프라인 (data_export_batches)
+→ AI 학습 데이터로 판매 → Reward Pool에 편입
 ```
 
 ---
@@ -1410,4 +1483,3 @@ MOM은 이벤트를 중심으로 attention을 만들고, 그 attention을 광고
 ```txt
 MOM = Event Feed + Prediction Creator Economy + Attention Monetization + AIO Oracle + Transparent Reward Distribution
 ```
-
