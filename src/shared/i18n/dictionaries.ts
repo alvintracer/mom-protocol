@@ -26,6 +26,8 @@ export const dictionary = {
     rewards: text("볼트", "Vault", "Vault"),
     oracle: text("오라클", "Oracle", "Oracle"),
     post: text("글쓰기", "Post", "Publicar"),
+    advertise: text("광고 · 캠페인", "Advertise", "Publicidad"),
+    markets: text("마켓", "Markets", "Mercados"),
   },
   topBar: {
     title: text("momment. 이벤트 어텐션", "momment. Event Attention", "momment. atencion de eventos"),

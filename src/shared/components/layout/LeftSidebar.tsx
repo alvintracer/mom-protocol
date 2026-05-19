@@ -18,6 +18,7 @@ import {
   RiUser3Line, 
   RiLoginBoxLine,
   RiLogoutBoxRLine,
+  RiMegaphoneLine,
   RiMoreFill
 } from "react-icons/ri";
 
@@ -27,6 +28,7 @@ export function LeftSidebar() {
   const { dictionary, t } = useI18n();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  const [showMore, setShowMore] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -101,6 +103,30 @@ export function LeftSidebar() {
         <nav className="space-y-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
+            if (item.href === "#more") {
+              return (
+                <div key={item.label} className="space-y-0.5">
+                  <button
+                    onClick={() => setShowMore((v) => !v)}
+                    className="flex w-full items-center justify-center gap-4 rounded-full px-3 py-2.5 text-[16px] font-semibold text-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/50 xl:justify-start xl:px-4"
+                  >
+                    <Icon className="size-[22px] shrink-0" />
+                    <span className="hidden xl:inline">{item.label}</span>
+                  </button>
+                  {showMore && (
+                    <>
+                      <Link
+                        href="/advertise"
+                        className="flex items-center justify-center gap-4 rounded-full px-3 py-2.5 text-[16px] font-semibold text-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/50 xl:justify-start xl:px-4"
+                      >
+                        <RiMegaphoneLine className="size-[22px] shrink-0" />
+                        <span className="hidden xl:inline">{t(dictionary.nav.advertise)}</span>
+                      </Link>
+                    </>
+                  )}
+                </div>
+              );
+            }
             return (
               <Link
                 key={item.label}
