@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { AppShell } from "@/shared/components/layout/AppShell";
 import { ThemeProvider } from "@/shared/components/ThemeProvider";
 import { LanguageProvider } from "@/shared/i18n/LanguageProvider";
@@ -61,6 +62,12 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4647509027586331"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
         />
       </head>
       <body>
