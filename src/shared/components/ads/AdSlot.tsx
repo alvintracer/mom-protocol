@@ -189,29 +189,35 @@ export function AdSlot({ position, size = "native", adsenseSlot, clusterId, clas
   return null;
 }
 
-/* ── AdSense Unit (lazy script loader) ──────────────────────── */
+/* ── AdSense Unit ───────────────────────────────────────────── */
 
 function AdSenseUnit({ client, slot, format }: { client: string; slot: string; format: string }) {
   const containerRef = useRef<HTMLModElement>(null);
+  const pushed = useRef(false);
 
   useEffect(() => {
-    // Load AdSense script once
-    if (typeof window !== "undefined" && !document.querySelector('script[src*="adsbygoogle"]')) {
-      const script = document.createElement("script");
-      script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${client}`;
-      script.async = true;
-      script.crossOrigin = "anonymous";
-      document.head.appendChild(script);
+    if (pushed.current) return;
+
+    function tryPush() {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ads = (window as any).adsbygoogle;
+        if (ads) {
+          ads.push({});
+          pushed.current = true;
+        } else {
+          // Script not loaded yet — retry
+          setTimeout(tryPush, 300);
+        }
+      } catch {
+        // Silently ignore
+      }
     }
 
-    // Push ad
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-    } catch {
-      // AdSense not ready yet
-    }
-  }, [client]);
+    // Give the <ins> element a tick to mount, then push
+    const timer = setTimeout(tryPush, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <ins
