@@ -416,6 +416,24 @@ export default function AdminPage() {
           </form>
         </div>
       </section>
+
+      {/* ─── Batch Translation ─── */}
+      <section className="rounded-2xl border border-border bg-background p-5 shadow-sm">
+        <h2 className="text-lg font-black text-foreground">번역 배치 관리</h2>
+        <p className="mt-1 text-sm font-semibold leading-6 text-muted-foreground">
+          포스트/댓글 번역을 배치로 실행합니다 (GPT-4o-mini, 최대 50개/회)
+        </p>
+        <TranslationPanel />
+      </section>
+
+      {/* ─── Vault Distribution ─── */}
+      <section className="rounded-2xl border border-border bg-background p-5 shadow-sm">
+        <h2 className="text-lg font-black text-foreground">볼트 에너지 분배</h2>
+        <p className="mt-1 text-sm font-semibold leading-6 text-muted-foreground">
+          플랫폼 볼트에 쌓인 에너지를 유저에게 비율 분배합니다
+        </p>
+        <VaultDistributionPanel />
+      </section>
     </div>
   );
 }
@@ -440,4 +458,241 @@ function Field({
 
 function initial(value: string) {
   return value.trim().slice(0, 1).toUpperCase() || "m";
+}
+
+/* ── Translation Panel ─────────────────────────────────────── */
+
+function TranslationPanel() {
+  const [running, setRunning] = useState(false);
+  const [results, setResults] = useState<{
+    batchSize?: number;
+    translated?: number;
+    remainingPending?: number;
+    contentTypes?: string[];
+    errors?: string[];
+    message?: string;
+    error?: string;
+  }[]>([]);
+  const [autoEnabled, setAutoEnabled] = useState(false);
+  const [intervalMin, setIntervalMin] = useState(60);
+  const [timerRef, setTimerRef] = useState<ReturnType<typeof setInterval> | null>(null);
+  const [looping, setLooping] = useState(false);
+
+  async function runBatch(): Promise<{ remainingPending: number }> {
+    setRunning(true);
+    try {
+      const res = await fetch("/api/admin/batch-translate", { method: "POST" });
+      const data = await res.json();
+      setResults((prev) => [data, ...prev].slice(0, 10));
+      setRunning(false);
+      return { remainingPending: data.remainingPending ?? 0 };
+    } catch (err) {
+      setResults((prev) => [{ error: String(err) }, ...prev].slice(0, 10));
+      setRunning(false);
+      return { remainingPending: 0 };
+    }
+  }
+
+  async function runAll() {
+    setLooping(true);
+    setResults([]);
+    let remaining = Infinity;
+    let rounds = 0;
+    const MAX_ROUNDS = 20; // safety limit
+
+    while (remaining > 0 && rounds < MAX_ROUNDS) {
+      rounds++;
+      const result = await runBatch();
+      remaining = result.remainingPending;
+      if (remaining > 0) {
+        // Small delay between batches to avoid rate limits
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+    setLooping(false);
+  }
+
+  function toggleAuto() {
+    if (autoEnabled) {
+      if (timerRef) clearInterval(timerRef);
+      setTimerRef(null);
+      setAutoEnabled(false);
+    } else {
+      runBatch();
+      const id = setInterval(runBatch, intervalMin * 60 * 1000);
+      setTimerRef(id);
+      setAutoEnabled(true);
+    }
+  }
+
+  const latest = results[0];
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <button
+          onClick={() => runBatch()}
+          disabled={running || looping}
+          className="h-11 rounded-full bg-blue-600 px-6 text-sm font-black text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+        >
+          {running ? "번역 중..." : "배치 1회 실행"}
+        </button>
+        <button
+          onClick={runAll}
+          disabled={running || looping}
+          className="h-11 rounded-full bg-foreground px-6 text-sm font-black text-background transition-transform hover:scale-[1.02] disabled:opacity-50"
+        >
+          {looping ? `전체 번역 중... (${results.length}회 완료)` : "⚡ 전체 번역 (pending → 0)"}
+        </button>
+
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <input
+              type="checkbox"
+              checked={autoEnabled}
+              onChange={toggleAuto}
+              className="size-4 accent-blue-600"
+            />
+            자동 반복
+          </label>
+          <input
+            type="number"
+            min={1}
+            value={intervalMin}
+            onChange={(e) => setIntervalMin(Number(e.target.value))}
+            disabled={autoEnabled}
+            className="h-9 w-20 rounded-lg border border-border bg-zinc-50 px-2 text-center text-sm font-bold dark:bg-zinc-900/50"
+          />
+          <span className="text-xs font-semibold text-muted-foreground">분 간격</span>
+        </div>
+      </div>
+
+      {autoEnabled && (
+        <p className="text-xs font-bold text-green-600">
+          ✅ 자동 모드 활성 — {intervalMin}분마다 배치 실행 중
+        </p>
+      )}
+
+      {latest && (
+        <div className="space-y-2">
+          {results.map((result, i) => (
+            <div key={i} className="rounded-xl border border-border bg-zinc-50 p-3 dark:bg-zinc-900/30">
+              {result.error ? (
+                <p className="text-sm font-bold text-rose-600">{result.error}</p>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-foreground">
+                    {result.message}
+                    {result.contentTypes && (
+                      <span className="ml-2 text-xs font-semibold text-muted-foreground">
+                        [{result.contentTypes.join(", ")}]
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                    배치: {result.batchSize ?? 0} · 번역: {result.translated ?? 0}
+                    · 남은 pending: {result.remainingPending ?? "?"}
+                    {result.errors && result.errors.length > 0 && (
+                      <span className="text-rose-500"> · 에러: {result.errors.length}건</span>
+                    )}
+                  </p>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Vault Distribution Panel ──────────────────────────────── */
+
+function VaultDistributionPanel() {
+  const [rate, setRate] = useState("0.5");
+  const [minEnergy, setMinEnergy] = useState("1");
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+
+  async function executeDistribution() {
+    if (!confirm(`분배율 ${Number(rate) * 100}%로 볼트 에너지를 분배하시겠습니까?`)) return;
+
+    setRunning(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/admin/distribute-vault", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          distribution_rate: Number(rate),
+          min_energy: Number(minEnergy),
+        }),
+      });
+      const data = await res.json();
+      setResult(data);
+    } catch (err) {
+      setResult({ error: String(err) });
+    }
+    setRunning(false);
+  }
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="분배율 (0~1)">
+          <input
+            type="number"
+            min="0"
+            max="1"
+            step="0.05"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border bg-zinc-50 px-3 text-sm font-bold text-foreground outline-none dark:bg-zinc-900/50"
+          />
+        </Field>
+        <Field label="최소 에너지 조건">
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={minEnergy}
+            onChange={(e) => setMinEnergy(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border bg-zinc-50 px-3 text-sm font-bold text-foreground outline-none dark:bg-zinc-900/50"
+          />
+        </Field>
+        <div className="flex items-end">
+          <button
+            onClick={executeDistribution}
+            disabled={running}
+            className="h-11 w-full rounded-full bg-foreground px-6 text-sm font-black text-background transition-transform hover:scale-[1.02] disabled:opacity-50"
+          >
+            {running ? "분배 중..." : "분배 실행"}
+          </button>
+        </div>
+      </div>
+
+      <p className="text-[11px] font-semibold text-muted-foreground">
+        분배율 0.5 = 볼트 에너지의 50%를 유저 활동 비율로 배분 → 전환 가능 에너지로 적립
+      </p>
+
+      {result && (
+        <div className="rounded-xl border border-border bg-zinc-50 p-3 dark:bg-zinc-900/30">
+          {(result as Record<string, unknown>).error ? (
+            <p className="text-sm font-bold text-rose-600">
+              {String((result as Record<string, unknown>).error)}
+            </p>
+          ) : (
+            <div className="space-y-1 text-sm font-bold text-foreground">
+              <p>✅ 분배 완료</p>
+              <p className="text-xs font-semibold text-muted-foreground">
+                볼트: {Number((result as Record<string, unknown>).vault_energy ?? 0).toLocaleString()} MOM
+                · 분배: {Number((result as Record<string, unknown>).distributed ?? 0).toLocaleString()} MOM
+                · 수혜자: {String((result as Record<string, unknown>).recipients ?? 0)}명
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }

@@ -29,8 +29,14 @@ const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 const storageKey = "momment.language";
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<LanguageCode>(defaultLanguage);
+export function LanguageProvider({
+  children,
+  defaultLanguage: initialLanguage,
+}: {
+  children: ReactNode;
+  defaultLanguage?: LanguageCode;
+}) {
+  const [language, setLanguageState] = useState<LanguageCode>(initialLanguage ?? defaultLanguage);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);

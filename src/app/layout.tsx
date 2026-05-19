@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+
 import { AppShell } from "@/shared/components/layout/AppShell";
 import { ThemeProvider } from "@/shared/components/ThemeProvider";
 import { LanguageProvider } from "@/shared/i18n/LanguageProvider";
@@ -33,14 +34,8 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
-  verification: {
-    // Add Google Search Console and Naver Search Advisor verification codes here
-    // google: "YOUR_GOOGLE_VERIFICATION_CODE",
-    // other: { "naver-site-verification": "YOUR_NAVER_CODE" },
-  },
 };
 
-// Organization JSON-LD for the entire site
 const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",

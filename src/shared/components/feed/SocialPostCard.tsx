@@ -21,9 +21,13 @@ import { createClient } from "@/shared/lib/supabase/client";
 type SocialPostCardProps = {
   post: SocialPost;
   linkedEvent: Event | null;
+  /** Translated body text (overrides post.body if provided) */
+  translatedBody?: string;
+  /** Translated title text (overrides post.title if provided) */
+  translatedTitle?: string | null;
 };
 
-export function SocialPostCard({ post, linkedEvent }: SocialPostCardProps) {
+export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTitle }: SocialPostCardProps) {
   const { dictionary, t } = useI18n();
   const router = useRouter();
   const [likeCount, setLikeCount] = useState(post.likeCount);
@@ -92,9 +96,9 @@ export function SocialPostCard({ post, linkedEvent }: SocialPostCardProps) {
               <span className="text-[13px] text-muted-foreground">{t(post.createdAtLabel)}</span>
             </div>
 
-            {post.title ? (
+            {(translatedTitle ?? post.title) ? (
               <h2 className="mt-2 text-[17px] font-black leading-6 text-foreground">
-                {post.title}
+                {translatedTitle ?? post.title}
               </h2>
             ) : null}
             {post.selectedOutcome ? (
@@ -109,7 +113,7 @@ export function SocialPostCard({ post, linkedEvent }: SocialPostCardProps) {
               </span>
             ) : null}
             <p className="mt-2 whitespace-pre-wrap text-[15px] leading-6 text-foreground">
-              {post.body}
+              {translatedBody ?? post.body}
             </p>
 
             {post.mediaItems && post.mediaItems.length > 0 ? (
