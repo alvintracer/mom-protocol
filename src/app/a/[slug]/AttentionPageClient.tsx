@@ -7,6 +7,7 @@ import {
   RiAddLine,
   RiExternalLinkLine,
   RiGlobalLine,
+  RiMegaphoneLine,
   RiShieldCheckLine,
   RiSendPlane2Line,
   RiUser3Line,
@@ -14,6 +15,8 @@ import {
 
 import { AioAssertionForm } from "@/shared/components/aio/AioAssertionForm";
 import { AioRuleSummary, AioStatusPipeline } from "@/shared/components/aio/AioStatusPipeline";
+import { AdSlot } from "@/shared/components/ads/AdSlot";
+import { AttentionSponsorBadge } from "@/shared/components/ads/AttentionSponsorBadge";
 import {
   AttentionDonateSection,
   AttentionDonorList,
@@ -489,6 +492,9 @@ export function AttentionPageClient({ slug }: { slug: string }) {
             donationTotal={(cluster as Record<string, unknown>).total_donation_krw as number ?? 0}
           />
 
+          {/* Sponsorship Badge (premium position) */}
+          <AttentionSponsorBadge clusterId={cluster.id} />
+
           <AttentionDonateSection
             clusterId={cluster.id}
             attentionScore={cluster.attention_score}
@@ -505,6 +511,30 @@ export function AttentionPageClient({ slug }: { slug: string }) {
           <AttentionLeaderboard clusterId={cluster.id} />
 
           <AttentionDonorList clusterId={cluster.id} />
+
+          {/* Ad Slot — attention sidebar */}
+          <AdSlot
+            position="attention_sidebar"
+            size="native"
+            clusterId={cluster.id}
+            adsenseSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_ATTENTION_SIDEBAR}
+          />
+
+          {/* Advertise / Sponsor CTA */}
+          <Link
+            href={`/advertise?sponsor=${cluster.slug || cluster.id}`}
+            className="flex items-center gap-2.5 rounded-2xl border border-dashed border-border/80 bg-zinc-50/40 px-4 py-3 transition-all hover:border-blue-400 hover:bg-blue-50/30 dark:bg-zinc-900/20 dark:hover:bg-zinc-900/40"
+          >
+            <RiMegaphoneLine className="size-4 text-blue-500" />
+            <div className="min-w-0">
+              <p className="text-[12px] font-black text-foreground">
+                {t(dictionary.ads.becomeSponsor)}
+              </p>
+              <p className="text-[10px] font-medium text-muted-foreground">
+                MOM Energy → Attention Boost
+              </p>
+            </div>
+          </Link>
 
           <section className="overflow-hidden rounded-2xl border border-border/80 bg-background shadow-sm">
             <div className="flex items-center gap-2 border-b border-border px-4 py-3">

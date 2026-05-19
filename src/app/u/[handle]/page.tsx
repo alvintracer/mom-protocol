@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
 import {
   RiExternalLinkLine,
   RiInstagramLine,
   RiLinksLine,
+  RiMailLine,
   RiRedditLine,
   RiTelegramLine,
   RiTwitterXLine,
@@ -189,21 +190,28 @@ export default function PublicProfilePage({
             </p>
           </div>
           {!isOwnProfile ? (
-            <button
-              onClick={handleToggleFollow}
-              disabled={isTogglingFollow}
-              className={`inline-flex h-10 items-center gap-2 rounded-full px-5 text-sm font-black transition-colors disabled:opacity-50 ${
-                isFollowing
-                  ? "border border-border bg-background text-foreground hover:border-red-300 hover:text-red-500"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
-            >
-              {isFollowing ? (
-                <>{t(dictionary.actions.following)}</>
-              ) : (
-                <><RiUserFollowLine className="size-4" />{t(dictionary.actions.follow)}</>
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <MessageButton
+                targetUserId={profile.id}
+                targetDisplayName={profile.display_name}
+                currentUserId={currentUserId}
+              />
+              <button
+                onClick={handleToggleFollow}
+                disabled={isTogglingFollow}
+                className={`inline-flex h-10 items-center gap-2 rounded-full px-5 text-sm font-black transition-colors disabled:opacity-50 ${
+                  isFollowing
+                    ? "border border-border bg-background text-foreground hover:border-red-300 hover:text-red-500"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+              >
+                {isFollowing ? (
+                  <>{t(dictionary.actions.following)}</>
+                ) : (
+                  <><RiUserFollowLine className="size-4" />{t(dictionary.actions.follow)}</>
+                )}
+              </button>
+            </div>
           ) : null}
         </div>
           <p className="mt-4 max-w-2xl text-[15px] leading-snug text-foreground">
@@ -349,5 +357,85 @@ function SocialLinkRow({ links }: { links: SocialLinks }) {
         );
       })}
     </div>
+  );
+}
+
+function MessageButton({
+  targetUserId,
+  targetDisplayName,
+  currentUserId,
+}: {
+  targetUserId: string;
+  targetDisplayName: string | null;
+  currentUserId: string | null;
+}) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const { dictionary, t } = useI18n();
+
+  const handleClick = useCallback(async () => {
+    if (!currentUserId) {
+      router.push("/auth");
+      return;
+    }
+    setLoading(true);
+    const supabase = createClient();
+
+    // Check for existing conversation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: myConvs } = await (supabase as any)
+      .from("conversation_members")
+      .select("conversation_id")
+      .eq("user_id", currentUserId);
+
+    const myConvIds = (myConvs ?? []).map((r: { conversation_id: string }) => r.conversation_id);
+
+    if (myConvIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: sharedConv } = await (supabase as any)
+        .from("conversation_members")
+        .select("conversation_id")
+        .eq("user_id", targetUserId)
+        .in("conversation_id", myConvIds)
+        .limit(1);
+
+      if (sharedConv && sharedConv.length > 0) {
+        router.push(`/messages?conv=${sharedConv[0].conversation_id}`);
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Create new conversation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: conv } = await (supabase as any)
+      .from("conversations")
+      .insert({})
+      .select("id")
+      .single();
+
+    if (conv) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from("conversation_members")
+        .insert([
+          { conversation_id: conv.id, user_id: currentUserId },
+          { conversation_id: conv.id, user_id: targetUserId },
+        ]);
+
+      router.push(`/messages?conv=${conv.id}`);
+    }
+    setLoading(false);
+  }, [currentUserId, targetUserId, router]);
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:border-blue-500 hover:text-blue-600 disabled:opacity-50"
+      title={t(dictionary.messagesPage.title)}
+    >
+      <RiMailLine className="size-4" />
+    </button>
   );
 }

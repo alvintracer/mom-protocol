@@ -8,6 +8,7 @@ import { text, type LanguageCode } from "@/shared/i18n/config";
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
 import { FeedSkeleton, LoadingBar } from "@/shared/components/ui/LoadingStates";
+import { AdSlot } from "@/shared/components/ads/AdSlot";
 import type { Database } from "@/shared/types/database";
 import type { SocialPost } from "@/shared/types/domain";
 
@@ -253,12 +254,17 @@ function HomeFeed() {
             actionLabel={t(dictionary.nav.explore)}
           />
         ) : null}
-        {posts.map((post) => (
-          <SocialPostCard
-            key={post.id}
-            post={post}
-            linkedEvent={null}
-          />
+        {posts.map((post, idx) => (
+          <div key={post.id}>
+            <SocialPostCard
+              post={post}
+              linkedEvent={null}
+            />
+            {/* Insert ad after every 5th post */}
+            {idx === 4 && (
+              <AdSlot position="feed_mid" size="native" adsenseSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_FEED} />
+            )}
+          </div>
         ))}
       </div>
     </div>

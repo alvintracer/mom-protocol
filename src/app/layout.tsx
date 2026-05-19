@@ -7,7 +7,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: `${siteName} of Attention You Create`,
+    default: `${siteName} 놓칠 수 없는 순간`,
     template: `%s | ${siteName}`,
   },
   description: defaultSeoDescription,

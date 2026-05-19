@@ -4,10 +4,6 @@ const HCAPTCHA_SECRET =
   process.env.HCAPTCHA_SECRET || "0x0000000000000000000000000000000000000000";
 const HCAPTCHA_VERIFY_URL = "https://api.hcaptcha.com/siteverify";
 
-// HMT Platform wallet address — all hCaptcha earnings flow here,
-// then get converted to platform energy and distributed via Contribution Ratio.
-// const HMT_PLATFORM_WALLET = process.env.HMT_PLATFORM_WALLET;
-
 type VerifyResult = {
   verified: boolean;
   action?: string;
@@ -19,9 +15,8 @@ type VerifyResult = {
  *
  * Body: { token: string; action: string }
  *
- * Server-side hCaptcha token verification.
- * All revenue from hCaptcha goes to the platform wallet (not individual users).
- * The platform then distributes through Contribution Ratio.
+ * Server-side hCaptcha token verification for bot prevention.
+ * NOTE: hCaptcha publisher rewards (HMT) ended in 2023 — no revenue generated.
  */
 export async function POST(request: NextRequest): Promise<NextResponse<VerifyResult>> {
   try {
@@ -73,11 +68,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<VerifyRes
       );
     }
 
-    // TODO: When HMT is fully integrated:
-    // 1. Record this verification in captcha_verifications table
-    // 2. Accumulate hCaptcha earnings to platform wallet
-    // 3. At settlement period, convert HMT earnings → platform energy pool
-    // 4. Distribute via Contribution Ratio
+    // TODO: Record this verification in captcha_verifications table
+    // for Trust Score calculation and Smart Captcha decisions
 
     return NextResponse.json({
       verified: true,

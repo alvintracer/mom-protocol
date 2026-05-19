@@ -374,16 +374,11 @@ Revenue Accounting
 
 ---
 
-### 4.7 hCaptcha + HMT (봇 방지 + 소액 수익)
+### 4.7 hCaptcha (봇 방지 + Trust Score)
 
-유저의 주요 액션(AIO 제출, 어텐션 빌드, 포스트 작성)에 hCaptcha 검증을 넣어 봇을 방지하고, Human Protocol(HMT) 토큰 수익을 플랫폼 지갑으로 받는다.
+유저의 주요 액션(AIO 제출, 어텐션 빌드, 포스트 작성)에 hCaptcha 검증을 넣어 봇과 스팸을 차단한다.
 
-핵심 원칙:
-
-```txt
-HMT 수익은 개별 유저에게 직접 지급하지 않는다.
-모든 수익은 플랫폼 지갑으로 귀속 → Reward Pool에 편입 → Contribution Ratio로 분배.
-```
+> ⚠️ hCaptcha 퍼블리셔 보상(HMT 수익)은 2023년에 종료되었다. 수익 발생 없음. 봇 방지 도구로만 사용한다.
 
 적용 범위:
 
@@ -393,16 +388,7 @@ HMT 수익은 개별 유저에게 직접 지급하지 않는다.
 미적용: 댓글, 좋아요, 예측 참여
 ```
 
-수익 플로우:
-
-```txt
-유저 captcha 풀이 → hCaptcha가 AI 라벨링 데이터로 활용
-→ Human Protocol에서 HMT 토큰 보상
-→ 플랫폼 지갑(Polygon)으로 입금
-→ 월 1회 정산: HMT → USDC 환전
-→ Reward Pool에 편입
-→ Contribution Ratio 기반 분배
-```
+captcha 검증 데이터는 MOM Energy의 Trust Score에 반영된다.
 
 상세 아키텍처: `docs/moment_hCaptcha_HMT_Architecture.md` 참조
 
@@ -412,9 +398,7 @@ HMT 수익은 개별 유저에게 직접 지급하지 않는다.
 CaptchaGate 컴포넌트 (구현 완료)
 서버 검증 API /api/captcha/verify (구현 완료)
 captcha_verifications 테이블 (마이그레이션 작성 완료)
-platform_hmt_revenue 테이블 (마이그레이션 작성 완료)
 Smart Captcha 조건 로직 (포스트 작성용, 미구현)
-정산 자동화 스크립트 (미구현)
 ```
 
 ---

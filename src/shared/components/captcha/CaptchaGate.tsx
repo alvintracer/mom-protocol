@@ -7,6 +7,7 @@ import { RiShieldCheckLine } from "react-icons/ri";
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 
 const HCAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_HCAPTCHA_SITEKEY || "10000000-ffff-ffff-ffff-000000000001";
+const HCAPTCHA_ENABLED = process.env.NEXT_PUBLIC_HCAPTCHA_ENABLED === "true";
 
 export type CaptchaAction =
   | "aio_assertion"
@@ -49,6 +50,20 @@ export function CaptchaGate({ action, required = true, children }: Props) {
   const captchaRef = useRef<HCaptcha>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isVerified, setIsVerified] = useState(!required);
+
+  // Feature flag: when disabled, pass through as always-verified
+  if (!HCAPTCHA_ENABLED) {
+    return (
+      <>
+        {children({
+          captchaToken: null,
+          isVerified: true,
+          CaptchaWidget: null,
+          resetCaptcha: () => {},
+        })}
+      </>
+    );
+  }
 
   const handleVerify = useCallback((responseToken: string) => {
     setToken(responseToken);

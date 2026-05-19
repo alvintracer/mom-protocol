@@ -138,3 +138,8 @@
     transform: translateX(320%);
   }
 }
+
+/* Reusable form input field */
+.input-field {
+  @apply w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[13px] font-medium text-foreground placeholder:text-muted-foreground/60 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-colors;
+}
