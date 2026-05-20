@@ -8,6 +8,7 @@ import {
   RiAttachment2,
   RiCloseLine,
   RiDraftLine,
+  RiFilmLine,
   RiImage2Line,
   RiLinksLine,
   RiListCheck2,
@@ -45,8 +46,11 @@ type UploadedMediaItem = {
   url: string;
 };
 
-const maxFiles = 5;
-const maxTotalBytes = 50 * 1024 * 1024;
+const maxImageFiles = 4;
+const maxVideoFiles = 1;
+const maxImageTotalBytes = 50 * 1024 * 1024;
+const maxVideoTotalBytes = 100 * 1024 * 1024;
+const maxVideoDurationSec = 180; // 3 minutes
 
 export default function NewPostPage() {
   return (
@@ -72,6 +76,8 @@ function NewPostContent() {
   const [title, setTitle] = useState(initialDraft.title);
   const [body, setBody] = useState(initialDraft.body);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [mediaMode, setMediaMode] = useState<"none" | "image" | "video">("none");
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [linkTitle, setLinkTitle] = useState(initialDraft.linkTitle);
   const [linkUrl, setLinkUrl] = useState(initialDraft.linkUrl);
   const [status, setStatus] = useState<"idle" | "saving" | "posting" | "error" | "login">("idle");
@@ -237,6 +243,8 @@ function NewPostContent() {
     () => mediaItems.reduce((sum, item) => sum + item.size, 0),
     [mediaItems],
   );
+  const maxFiles = mediaMode === "video" ? maxVideoFiles : maxImageFiles;
+  const maxTotalBytes = mediaMode === "video" ? maxVideoTotalBytes : maxImageTotalBytes;
   const normalizedLinkUrl = linkUrl.trim();
   const canPost =
     title.trim().length > 0 &&
@@ -244,20 +252,75 @@ function NewPostContent() {
     mediaItems.length <= maxFiles &&
     totalMediaBytes <= maxTotalBytes;
 
-  function handleMediaChange(event: ChangeEvent<HTMLInputElement>) {
+  async function handleMediaChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
-    const nextFiles = files.slice(0, Math.max(0, maxFiles - mediaItems.length));
-    const nextItems = nextFiles.map((file) => ({
-      id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
-      file,
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
-    }));
+    if (files.length === 0) return;
+    setMediaError(null);
 
-    setMediaItems((current) => [...current, ...nextItems].slice(0, maxFiles));
+    const firstFileType = files[0].type;
+    const incomingMode = firstFileType.startsWith("video/") ? "video" : "image";
+
+    // Enforce single media type
+    if (mediaMode !== "none" && mediaMode !== incomingMode) {
+      setMediaError(
+        incomingMode === "video"
+          ? t(dictionary.postCreate.mediaTypeConflictVideo)
+          : t(dictionary.postCreate.mediaTypeConflictImage),
+      );
+      event.target.value = "";
+      return;
+    }
+
+    const effectiveMaxFiles = incomingMode === "video" ? maxVideoFiles : maxImageFiles;
+    const nextFiles = files.slice(0, Math.max(0, effectiveMaxFiles - mediaItems.length));
+    const nextItems: MediaItem[] = [];
+
+    for (const file of nextFiles) {
+      // Video: only 1 allowed, check duration
+      if (file.type.startsWith("video/")) {
+        if (mediaItems.some((m) => m.type.startsWith("video/"))) {
+          setMediaError(t(dictionary.postCreate.videoSingleOnly));
+          continue;
+        }
+        // Check duration
+        const duration = await getVideoDuration(file);
+        if (duration > maxVideoDurationSec) {
+          setMediaError(t(dictionary.postCreate.videoTooLong));
+          continue;
+        }
+      }
+
+      nextItems.push({
+        id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
+        file,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        previewUrl: file.type.startsWith("image/")
+          ? URL.createObjectURL(file)
+          : file.type.startsWith("video/")
+            ? URL.createObjectURL(file)
+            : undefined,
+      });
+    }
+
+    if (nextItems.length > 0) {
+      const newMode = nextItems[0].type.startsWith("video/") ? "video" : "image";
+      setMediaMode((prev) => (prev === "none" ? newMode : prev));
+      setMediaItems((current) => [...current, ...nextItems].slice(0, effectiveMaxFiles));
+    }
     event.target.value = "";
+  }
+
+  function handleRemoveMedia(itemId: string) {
+    setMediaItems((current) => {
+      const item = current.find((i) => i.id === itemId);
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      const next = current.filter((i) => i.id !== itemId);
+      if (next.length === 0) setMediaMode("none");
+      return next;
+    });
+    setMediaError(null);
   }
 
   function saveDraft() {
@@ -484,40 +547,44 @@ function NewPostContent() {
                 {t(dictionary.postCreate.addMedia)}
                 <input
                   type="file"
-                  multiple
-                  accept="image/*,audio/*"
+                  multiple={mediaMode !== "video"}
+                  accept={mediaMode === "video" ? "video/*" : mediaMode === "image" ? "image/*" : "image/*,video/*"}
                   onChange={handleMediaChange}
                   className="sr-only"
                 />
               </label>
             </div>
 
+            {mediaError ? (
+              <p className="mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-[12px] font-bold text-rose-600">{mediaError}</p>
+            ) : null}
+
             {mediaItems.length > 0 ? (
-              <div className="mt-4 flex snap-x gap-3 overflow-x-auto pb-1">
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {mediaItems.map((item) => (
                   <div
                     key={item.id}
-                    className="relative min-w-[180px] snap-start overflow-hidden rounded-xl border border-border bg-zinc-50 dark:bg-zinc-900/50"
+                    className="relative overflow-hidden rounded-xl border border-border bg-zinc-50 dark:bg-zinc-900/50"
                   >
-                    {item.previewUrl ? (
+                    {item.type.startsWith("image/") && item.previewUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.previewUrl} alt="" className="h-32 w-full object-cover" />
+                      <img src={item.previewUrl} alt="" className="aspect-square w-full object-cover" />
+                    ) : item.type.startsWith("video/") && item.previewUrl ? (
+                      <div className="relative aspect-video w-full bg-black">
+                        <video src={item.previewUrl} className="h-full w-full object-contain" preload="metadata" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <RiFilmLine className="size-8 text-white/70" />
+                        </div>
+                      </div>
                     ) : (
-                      <div className="flex h-32 items-center justify-center text-blue-600">
+                      <div className="flex aspect-square items-center justify-center text-blue-600">
                         <RiImage2Line className="size-8" />
                       </div>
                     )}
                     <button
                       type="button"
-                      onClick={() =>
-                        setMediaItems((current) => {
-                          if (item.previewUrl) {
-                            URL.revokeObjectURL(item.previewUrl);
-                          }
-                          return current.filter((currentItem) => currentItem.id !== item.id);
-                        })
-                      }
-                      className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm"
+                      onClick={() => handleRemoveMedia(item.id)}
+                      className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm hover:bg-background"
                     >
                       <RiCloseLine className="size-4" />
                     </button>
@@ -623,7 +690,7 @@ function NewPostContent() {
               </p>
             ) : null}
             <div className="mt-4 text-xs font-bold text-muted-foreground">
-              {t(dictionary.postCreate.mediaCount)} {mediaItems.length}/{maxFiles} · {formatBytes(totalMediaBytes)} / 50MB
+              {t(dictionary.postCreate.mediaCount)} {mediaItems.length}/{maxFiles} · {formatBytes(totalMediaBytes)} / {mediaMode === "video" ? "100MB" : "50MB"}
             </div>
           </section>
         </aside>
@@ -774,4 +841,20 @@ function formatBytes(bytes: number) {
   }
 
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function getVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      resolve(video.duration);
+      URL.revokeObjectURL(video.src);
+    };
+    video.onerror = () => {
+      resolve(0);
+      URL.revokeObjectURL(video.src);
+    };
+    video.src = URL.createObjectURL(file);
+  });
 }

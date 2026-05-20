@@ -17,6 +17,7 @@ import {
 import type { Event, SocialPost } from "@/shared/types/domain";
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
+import { PostMediaGrid } from "./PostMediaGrid";
 
 type SocialPostCardProps = {
   post: SocialPost;
@@ -117,37 +118,12 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
             </p>
 
             {post.mediaItems && post.mediaItems.length > 0 ? (
-              <div className="mt-3 flex snap-x gap-2 overflow-x-auto pb-1">
-                {post.mediaItems.map((item, index) => (
-                  <div
-                    key={`${item.name}-${index}`}
-                    className="min-w-[180px] snap-start overflow-hidden rounded-xl border border-border bg-zinc-50 dark:bg-zinc-900/50"
-                  >
-                    {item.previewUrl && item.type.startsWith("image/") ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.previewUrl}
-                        alt=""
-                        className="h-32 w-full object-cover"
-                      />
-                    ) : item.previewUrl && item.type.startsWith("audio/") ? (
-                      <div className="p-3">
-                        <audio controls src={item.previewUrl} className="w-full" />
-                      </div>
-                    ) : null}
-                    <div className="p-3">
-                      <p className="truncate text-xs font-black text-foreground">
-                        {item.name}
-                      </p>
-                      <p className="mt-1 text-[11px] font-bold text-muted-foreground">
-                        {item.type.startsWith("audio/")
-                          ? t(dictionary.postCreate.audio)
-                          : t(dictionary.postCreate.media)} · {formatBytes(item.size)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <PostMediaGrid
+                items={post.mediaItems
+                  .filter((i) => i.previewUrl)
+                  .map((i) => ({ url: i.previewUrl!, type: i.type, name: i.name }))}
+                variant="feed"
+              />
             ) : null}
 
             {post.repostOf ? (

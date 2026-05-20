@@ -18,6 +18,7 @@ import {
 import { PageSkeleton } from "@/shared/components/ui/LoadingStates";
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
+import { PostMediaGrid } from "@/shared/components/feed/PostMediaGrid";
 import { useContentTranslations } from "@/shared/hooks/useContentTranslations";
 import type { Database, SupportedLanguage } from "@/shared/types/database";
 
@@ -331,43 +332,12 @@ export default function PostDetailPage({
             </p>
 
             {Array.isArray(post.media_items) && post.media_items.length > 0 ? (
-              <div className="mt-4 flex snap-x gap-3 overflow-x-auto pb-1">
-                {post.media_items.map((item, index) => {
-                  const media =
-                    item && typeof item === "object" && !Array.isArray(item)
-                      ? item
-                      : {};
-                  return (
-                    <div
-                      key={index}
-                      className="min-w-[200px] snap-start overflow-hidden rounded-xl border border-border bg-zinc-50 dark:bg-zinc-900/50"
-                    >
-                      {typeof media.url === "string" &&
-                      typeof media.type === "string" &&
-                      media.type.startsWith("image/") ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={media.url} alt="" className="h-36 w-full object-cover" />
-                      ) : typeof media.url === "string" &&
-                        typeof media.type === "string" &&
-                        media.type.startsWith("audio/") ? (
-                        <div className="p-3">
-                          <audio controls src={media.url} className="w-full" />
-                        </div>
-                      ) : null}
-                      <div className="p-3">
-                        <p className="truncate text-sm font-black text-foreground">
-                          {typeof media.name === "string" ? media.name : t(dictionary.common.attachment)}
-                        </p>
-                        <p className="mt-1 text-xs font-bold text-muted-foreground">
-                          {typeof media.type === "string" && media.type.startsWith("audio/")
-                            ? t(dictionary.postCreate.audio)
-                            : t(dictionary.postCreate.media)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <PostMediaGrid
+                items={(post.media_items as Array<Record<string, unknown>>)
+                  .filter((m) => typeof m?.url === "string" && typeof m?.type === "string")
+                  .map((m) => ({ url: m.url as string, type: m.type as string, name: (m.name as string) || undefined }))}
+                variant="detail"
+              />
             ) : null}
 
             {post.link_url ? (
