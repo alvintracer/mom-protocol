@@ -7,9 +7,6 @@ const NOWPAYMENTS_API_URL = process.env.NOWPAYMENTS_SANDBOX === "true"
   : "https://api.nowpayments.io/v1";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-// MOM Energy exchange rate: 1 USD = 100 MOM Energy
-const MOM_ENERGY_PER_USD = 100;
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -33,7 +30,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const momEnergyAmount = Math.floor(amount_usd * MOM_ENERGY_PER_USD);
+    // Dynamic rate: fetch current $/MOM from vault
+    const supabaseForRate = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+    const { data: rateData } = await supabaseForRate.rpc("get_mom_rate");
+    const momRate = Number(rateData) || 0.001;
+    const momEnergyAmount = Math.floor(amount_usd / momRate);
 
     // Build invoice payload — omit pay_currency so the user picks on the
     // NOWPayments payment page (some currencies may be temporarily unavailable).

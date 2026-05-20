@@ -196,9 +196,11 @@ function AdSenseUnit({ client, slot, format }: { client: string; slot: string; f
   const pushed = useRef(false);
 
   useEffect(() => {
-    if (pushed.current) return;
+    // Reset on each mount so re-renders on route change can re-push
+    pushed.current = false;
 
     function tryPush() {
+      if (pushed.current) return;
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ads = (window as any).adsbygoogle;
@@ -207,23 +209,23 @@ function AdSenseUnit({ client, slot, format }: { client: string; slot: string; f
           pushed.current = true;
         } else {
           // Script not loaded yet — retry
-          setTimeout(tryPush, 300);
+          setTimeout(tryPush, 500);
         }
       } catch {
-        // Silently ignore
+        // Silently ignore — adsbygoogle may throw if already filled
       }
     }
 
     // Give the <ins> element a tick to mount, then push
-    const timer = setTimeout(tryPush, 100);
+    const timer = setTimeout(tryPush, 200);
     return () => clearTimeout(timer);
-  }, []);
+  }, [slot]);
 
   return (
     <ins
       ref={containerRef}
       className="adsbygoogle"
-      style={{ display: "block" }}
+      style={{ display: "block", minHeight: 100 }}
       data-ad-client={client}
       data-ad-slot={slot}
       data-ad-format={format}

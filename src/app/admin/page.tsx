@@ -426,13 +426,13 @@ export default function AdminPage() {
         <TranslationPanel />
       </section>
 
-      {/* ─── Vault Distribution ─── */}
+      {/* ─── Withdrawal Queue Management ─── */}
       <section className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-        <h2 className="text-lg font-black text-foreground">볼트 에너지 분배</h2>
+        <h2 className="text-lg font-black text-foreground">출금 큐 관리</h2>
         <p className="mt-1 text-sm font-semibold leading-6 text-muted-foreground">
-          플랫폼 볼트에 쌓인 에너지를 유저에게 비율 분배합니다
+          유저들의 MOM 출금 요청을 승인하거나 거절(취소)합니다.
         </p>
-        <VaultDistributionPanel />
+        <WithdrawalQueuePanel />
       </section>
     </div>
   );
@@ -606,93 +606,150 @@ function TranslationPanel() {
   );
 }
 
-/* ── Vault Distribution Panel ──────────────────────────────── */
+/* ── Withdrawal Queue Panel ──────────────────────────────── */
 
-function VaultDistributionPanel() {
-  const [rate, setRate] = useState("0.5");
-  const [minEnergy, setMinEnergy] = useState("1");
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+type WithdrawalRequest = {
+  id: string;
+  user_id: string;
+  mom_amount: number;
+  rate_at_request: number;
+  usd_amount: number;
+  spread: number;
+  wallet_id: string | null;
+  status: string;
+  created_at: string;
+  profiles: { handle: string | null; display_name: string | null };
+};
 
-  async function executeDistribution() {
-    if (!confirm(`분배율 ${Number(rate) * 100}%로 볼트 에너지를 분배하시겠습니까?`)) return;
+function WithdrawalQueuePanel() {
+  const [requests, setRequests] = useState<WithdrawalRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
-    setRunning(true);
-    setResult(null);
+  useEffect(() => {
+    fetchWithdrawals();
+  }, []);
+
+  async function fetchWithdrawals() {
     try {
-      const res = await fetch("/api/admin/distribute-vault", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          distribution_rate: Number(rate),
-          min_energy: Number(minEnergy),
-        }),
-      });
+      const res = await fetch("/api/admin/withdrawals");
+      if (!res.ok) throw new Error("Failed to fetch withdrawals");
       const data = await res.json();
-      setResult(data);
+      setRequests(data.withdrawals);
     } catch (err) {
-      setResult({ error: String(err) });
+      setError(String(err));
+    } finally {
+      setLoading(false);
     }
-    setRunning(false);
   }
+
+  async function updateStatus(id: string, status: string) {
+    if (!confirm(`Are you sure you want to mark this as ${status}?`)) return;
+    setProcessingId(id);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/withdrawals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update");
+      }
+      await fetchWithdrawals();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  if (loading) return <div className="mt-4 h-32 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900/50" />;
 
   return (
     <div className="mt-4 space-y-4">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="분배율 (0~1)">
-          <input
-            type="number"
-            min="0"
-            max="1"
-            step="0.05"
-            value={rate}
-            onChange={(e) => setRate(e.target.value)}
-            className="h-11 w-full rounded-xl border border-border bg-zinc-50 px-3 text-sm font-bold text-foreground outline-none dark:bg-zinc-900/50"
-          />
-        </Field>
-        <Field label="최소 에너지 조건">
-          <input
-            type="number"
-            min="0"
-            step="1"
-            value={minEnergy}
-            onChange={(e) => setMinEnergy(e.target.value)}
-            className="h-11 w-full rounded-xl border border-border bg-zinc-50 px-3 text-sm font-bold text-foreground outline-none dark:bg-zinc-900/50"
-          />
-        </Field>
-        <div className="flex items-end">
-          <button
-            onClick={executeDistribution}
-            disabled={running}
-            className="h-11 w-full rounded-full bg-foreground px-6 text-sm font-black text-background transition-transform hover:scale-[1.02] disabled:opacity-50"
-          >
-            {running ? "분배 중..." : "분배 실행"}
-          </button>
-        </div>
+      {error && <p className="text-sm font-bold text-rose-600">{error}</p>}
+      
+      <div className="overflow-x-auto rounded-xl border border-border">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-zinc-50 font-bold text-muted-foreground dark:bg-zinc-900/50">
+            <tr>
+              <th className="px-4 py-3">Date</th>
+              <th className="px-4 py-3">User</th>
+              <th className="px-4 py-3 text-right">MOM Amount</th>
+              <th className="px-4 py-3 text-right">USD Amount</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border font-medium">
+            {requests.map((req) => (
+              <tr key={req.id} className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/30">
+                <td className="px-4 py-3 tabular-nums">{new Date(req.created_at).toLocaleString()}</td>
+                <td className="px-4 py-3">
+                  {req.profiles?.display_name || req.profiles?.handle || req.user_id.slice(0, 8)}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums">
+                  {req.mom_amount.toLocaleString()} MOM
+                  <br />
+                  <span className="text-[10px] text-muted-foreground">Spread: {req.spread * 100}%</span>
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
+                  ${req.usd_amount.toFixed(2)}
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-black uppercase tracking-wider ${
+                    req.status === 'queued' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                    req.status === 'processing' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                    req.status === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                    'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
+                  }`}>
+                    {req.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right space-x-2">
+                  {req.status === "queued" && (
+                    <button
+                      disabled={processingId === req.id}
+                      onClick={() => updateStatus(req.id, "processing")}
+                      className="text-blue-600 hover:text-blue-800 font-bold disabled:opacity-50"
+                    >
+                      Process
+                    </button>
+                  )}
+                  {req.status === "processing" && (
+                    <button
+                      disabled={processingId === req.id}
+                      onClick={() => updateStatus(req.id, "completed")}
+                      className="text-emerald-600 hover:text-emerald-800 font-bold disabled:opacity-50"
+                    >
+                      Complete
+                    </button>
+                  )}
+                  {(req.status === "queued" || req.status === "processing") && (
+                    <button
+                      disabled={processingId === req.id}
+                      onClick={() => updateStatus(req.id, "failed")}
+                      className="text-rose-600 hover:text-rose-800 font-bold disabled:opacity-50 ml-2"
+                    >
+                      Fail/Refund
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {requests.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                  No withdrawal requests found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
-
-      <p className="text-[11px] font-semibold text-muted-foreground">
-        분배율 0.5 = 볼트 에너지의 50%를 유저 활동 비율로 배분 → 전환 가능 에너지로 적립
-      </p>
-
-      {result && (
-        <div className="rounded-xl border border-border bg-zinc-50 p-3 dark:bg-zinc-900/30">
-          {(result as Record<string, unknown>).error ? (
-            <p className="text-sm font-bold text-rose-600">
-              {String((result as Record<string, unknown>).error)}
-            </p>
-          ) : (
-            <div className="space-y-1 text-sm font-bold text-foreground">
-              <p>✅ 분배 완료</p>
-              <p className="text-xs font-semibold text-muted-foreground">
-                볼트: {Number((result as Record<string, unknown>).vault_energy ?? 0).toLocaleString()} MOM
-                · 분배: {Number((result as Record<string, unknown>).distributed ?? 0).toLocaleString()} MOM
-                · 수혜자: {String((result as Record<string, unknown>).recipients ?? 0)}명
-              </p>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

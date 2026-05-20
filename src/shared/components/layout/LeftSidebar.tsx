@@ -29,6 +29,7 @@ export function LeftSidebar() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [showMore, setShowMore] = useState(false);
+  const [momRate, setMomRate] = useState<number>(0.001);
 
   useEffect(() => {
     let mounted = true;
@@ -61,6 +62,14 @@ export function LeftSidebar() {
     }
 
     loadProfile();
+
+    // Fetch dynamic MOM rate
+    fetch("/api/rate")
+      .then((res) => res.json())
+      .then((data) => {
+        if (mounted && data.rate) setMomRate(Number(data.rate));
+      })
+      .catch(() => {});
 
     const { data: listener } = supabase.auth.onAuthStateChange(() => {
       loadProfile();
@@ -175,13 +184,13 @@ export function LeftSidebar() {
             <div>
               <p className="font-medium text-muted-foreground">{t(dictionary.sidebar.totalAssets)}</p>
               <p className="font-black tabular-nums text-foreground">
-                ${(Number(profile.mom_energy) / 100).toFixed(2)}
+                ${(Number(profile.mom_energy) * momRate).toFixed(2)}
               </p>
             </div>
             <div className="border-l border-border pl-3">
-              <p className="font-medium text-muted-foreground">{t(dictionary.sidebar.monthlyAssets)}</p>
+              <p className="font-medium text-muted-foreground">{t(dictionary.sidebar.rate)}</p>
               <p className="font-black tabular-nums text-foreground">
-                ${(Number(profile.mom_energy) * 0.1 / 100).toFixed(2)}
+                ${momRate.toFixed(4)}/MOM
               </p>
             </div>
           </div>

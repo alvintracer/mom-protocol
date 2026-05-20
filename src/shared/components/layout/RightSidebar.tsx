@@ -451,6 +451,9 @@ export function RightSidebar() {
 
           {/* ─── Footer ─── */}
           <div className="px-4 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-muted-foreground/70">
+            <Link href="/economy" className="hover:underline font-bold text-blue-600 dark:text-blue-400">
+              {t(dictionary.sidebar.economyDocs ?? { ko: "momment. 이코노미 구조", en: "momment. Economy", es: "Economía momment." })}
+            </Link>
             <a href="/terms" className="hover:underline">{t(dictionary.footer.terms)}</a>
             <a href="/privacy" className="hover:underline">{t(dictionary.footer.privacy)}</a>
             <a href="/cookies" className="hover:underline">{t(dictionary.footer.cookies)}</a>

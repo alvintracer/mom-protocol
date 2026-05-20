@@ -37,16 +37,6 @@ type Contributor = {
   donation_count: number;
 };
 
-type Donor = {
-  user_id: string;
-  handle: string | null;
-  display_name: string | null;
-  avatar_url: string | null;
-  total_donated_krw: number;
-  total_energy_granted: number;
-  rank: number;
-};
-
 // ────────────────────────────────────────────
 // 1. Attention Energy Gauge
 // ────────────────────────────────────────────
@@ -59,7 +49,6 @@ export function AttentionEnergyGauge({
 }: {
   attentionScore: number;
   viewCount?: number;
-  visitorCount?: number;
   donationTotal?: number;
 }) {
   const { dictionary, t } = useI18n();
@@ -110,7 +99,7 @@ export function AttentionEnergyGauge({
         />
         <MiniStat
           icon={<RiHeartFill className="size-3.5 text-rose-400" />}
-          value={`₩${formatCompact(donationTotal)}`}
+          value={`${formatCompact(donationTotal)} MOM`}
           label={t(m.energyGauge.donations)}
         />
       </div>
@@ -267,7 +256,7 @@ function ContributorRow({ contributor: c }: { contributor: Contributor }) {
 // 3. Donation Button + Modal
 // ────────────────────────────────────────────
 
-const DONATION_PRESETS = [1000, 3000, 5000, 10000];
+const DONATION_PRESETS = [100, 300, 500, 1000];
 
 export function AttentionDonateSection({
   clusterId,
@@ -282,7 +271,7 @@ export function AttentionDonateSection({
   const m = dictionary.attentionMonetization.donation;
 
   const [showModal, setShowModal] = useState(false);
-  const [selectedAmount, setSelectedAmount] = useState<number>(3000);
+  const [selectedAmount, setSelectedAmount] = useState<number>(300);
   const [customAmount, setCustomAmount] = useState("");
   const [message, setMessage] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -290,8 +279,8 @@ export function AttentionDonateSection({
   const [success, setSuccess] = useState<{ energy: number } | null>(null);
 
   const effectiveAmount = customAmount ? parseInt(customAmount, 10) || 0 : selectedAmount;
-  const previewEnergy = Math.floor(effectiveAmount / 1000) * 10;
-  const isValid = effectiveAmount >= 1000;
+  const previewEnergy = Math.floor(effectiveAmount * 0.60); // 60% of MOM becomes Attention Energy
+  const isValid = effectiveAmount >= 10;
 
   const handleDonate = useCallback(async () => {
     if (!isValid || submitting) return;
@@ -302,15 +291,22 @@ export function AttentionDonateSection({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase.rpc as any)("submit_attention_donation", {
         p_cluster_id: clusterId,
-        p_amount_krw: effectiveAmount,
+        p_bid_amount: effectiveAmount,
         p_message: message || null,
         p_is_anonymous: isAnonymous,
       });
 
-      if (error) throw error;
-      const result = data as unknown as { attention_energy_granted: number };
-      setSuccess({ energy: result.attention_energy_granted });
-      onDonated?.(result.attention_energy_granted);
+      if (error) {
+        if (error.message.includes("insufficient_mom_energy")) {
+          // Redirect to profile page to buy MOM
+          window.location.href = `/${document.documentElement.lang}/profile`;
+          return;
+        }
+        throw error;
+      }
+      const result = data as unknown as { attention_score_boost: number };
+      setSuccess({ energy: result.attention_score_boost });
+      onDonated?.(result.attention_score_boost);
 
       // Reset after 3s
       setTimeout(() => {
@@ -383,7 +379,7 @@ export function AttentionDonateSection({
                               : "border-border text-foreground hover:border-amber-400"
                           }`}
                         >
-                          ₩{amount.toLocaleString()}
+                          {amount.toLocaleString()} MOM
                         </button>
                       ))}
                     </div>
@@ -444,7 +440,7 @@ export function AttentionDonateSection({
                     disabled={!isValid || submitting}
                     className="flex-[2] rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-sm font-black text-white shadow-md transition-all hover:shadow-lg disabled:opacity-50"
                   >
-                    {submitting ? "..." : `₩${effectiveAmount.toLocaleString()} ${t(m.donateButton)}`}
+                    {submitting ? "..." : `${effectiveAmount.toLocaleString()} MOM ${t(m.donateButton)}`}
                   </button>
                 </div>
               </>
@@ -459,6 +455,16 @@ export function AttentionDonateSection({
 // ────────────────────────────────────────────
 // 4. Donor List
 // ────────────────────────────────────────────
+
+type Donor = {
+  user_id: string;
+  handle: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  total_donated_mom: number;
+  total_energy_granted: number;
+  rank: number;
+};
 
 export function AttentionDonorList({ clusterId }: { clusterId: string }) {
   const { dictionary, t } = useI18n();
@@ -504,7 +510,7 @@ export function AttentionDonorList({ clusterId }: { clusterId: string }) {
             </p>
             <div className="text-right">
               <p className="text-[11px] font-black tabular-nums text-amber-600 dark:text-amber-400">
-                ₩{d.total_donated_krw.toLocaleString()}
+                {d.total_donated_mom.toLocaleString()} MOM
               </p>
               <p className="text-[9px] font-medium tabular-nums text-muted-foreground">
                 +{d.total_energy_granted}⚡

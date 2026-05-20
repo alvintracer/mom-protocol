@@ -332,7 +332,7 @@ export function AttentionPageClient({ slug }: { slug: string }) {
             <div className="flex items-center gap-2">
               <RiGlobalLine className="size-5 text-emerald-600" />
               <h3 className="text-[14px] font-black text-emerald-700 dark:text-emerald-400">
-                {t(dictionary.aio.challenge.finalizedOutcome)}
+                {t(dictionary.aio.resolution.finalizedOutcome)}
               </h3>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -356,7 +356,7 @@ export function AttentionPageClient({ slug }: { slug: string }) {
                 })}
             </div>
             <p className="mt-3 text-xs font-medium text-muted-foreground">
-              {t(dictionary.aio.challenge.assertionsClosed)}
+              {t(dictionary.aio.resolution.assertionsClosed)}
             </p>
           </div>
         ) : null}
@@ -492,8 +492,7 @@ export function AttentionPageClient({ slug }: { slug: string }) {
           <AttentionEnergyGauge
             attentionScore={cluster.attention_score}
             viewCount={(cluster as Record<string, unknown>).total_view_count as number ?? 0}
-            visitorCount={(cluster as Record<string, unknown>).unique_visitor_count as number ?? 0}
-            donationTotal={(cluster as Record<string, unknown>).total_donation_krw as number ?? 0}
+            donationTotal={(cluster as Record<string, unknown>).total_donation_mom as number ?? 0}
           />
 
           {/* Sponsorship Badge (premium position) */}

@@ -20,7 +20,7 @@ import {
 } from "react-icons/ri";
 
 import {
-  AioChallengeSection,
+
   AioEvidenceList,
   AioLlmResults,
   AioStatusPipeline,
@@ -72,13 +72,7 @@ type LlmRow = {
   created_at: string;
 };
 
-type ChallengeRow = {
-  id: string;
-  counter_claim_text: string;
-  counter_outcome: string | null;
-  status: string;
-  created_at: string;
-};
+
 
 // ─── Component ──────────────────────────────────
 
@@ -92,13 +86,12 @@ export default function OracleDashboardPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvidenceRow[]>([]);
   const [llmVerifications, setLlmVerifications] = useState<LlmRow[]>([]);
-  const [challenges, setChallenges] = useState<ChallengeRow[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
   const [verifyNotice, setVerifyNotice] = useState<string | null>(null);
   const [showAioExplainer, setShowAioExplainer] = useState(false);
   const [showVerifierRewards, setShowVerifierRewards] = useState(false);
-  const [filter, setFilter] = useState<"all" | "pending" | "challenge" | "finalizable" | "finalized" | "rejected">("all");
+  const [filter, setFilter] = useState<"all" | "pending" | "finalized" | "rejected">("all");
   const [finalizingIds, setFinalizingIds] = useState<Set<string>>(new Set());
 
   // ─── Stats ─────────────────────────────────
@@ -107,23 +100,15 @@ export default function OracleDashboardPage() {
     const pending = assertions.filter(
       (a) => a.status === "submitted" || a.status === "evidence_captured" || a.status === "llm_verified",
     ).length;
-    const challenged = assertions.filter(
-      (a) => a.status === "challenge_period" || a.status === "challenged",
-    ).length;
     const finalized = assertions.filter((a) => a.status === "finalized").length;
     const rejected = assertions.filter((a) => a.status === "rejected").length;
-    const finalizable = assertions.filter(
-      (a) => a.status === "challenge_period" && a.challenge_ends_at && new Date(a.challenge_ends_at) < new Date(),
-    ).length;
-    return { total, pending, challenged, finalized, rejected, finalizable };
+    return { total, pending, finalized, rejected };
   }, [assertions]);
 
   // ─── Filtered Assertions ───────────────────
   const filteredAssertions = useMemo(() => {
     if (filter === "all") return assertions;
     if (filter === "pending") return assertions.filter((a) => ["submitted", "evidence_captured", "llm_verified"].includes(a.status));
-    if (filter === "challenge") return assertions.filter((a) => a.status === "challenge_period" || a.status === "challenged");
-    if (filter === "finalizable") return assertions.filter((a) => a.status === "challenge_period" && a.challenge_ends_at && new Date(a.challenge_ends_at) < new Date());
     if (filter === "finalized") return assertions.filter((a) => a.status === "finalized");
     if (filter === "rejected") return assertions.filter((a) => a.status === "rejected");
     return assertions;
@@ -145,7 +130,7 @@ export default function OracleDashboardPage() {
   const loadDetails = useCallback(async (assertionId: string) => {
     setDetailLoading(true);
     const supabase = createClient();
-    const [evRes, llmRes, chRes] = await Promise.all([
+    const [evRes, llmRes] = await Promise.all([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (supabase as any).from("aio_evidence_items").select("*").eq("assertion_id", assertionId).order("created_at"),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -154,13 +139,10 @@ export default function OracleDashboardPage() {
         .select("*")
         .eq("assertion_id", assertionId)
         .order("created_at", { ascending: false }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any).from("aio_challenges").select("*").eq("assertion_id", assertionId).order("created_at"),
     ]);
 
     setEvidence((evRes.data as EvidenceRow[]) ?? []);
     setLlmVerifications((llmRes.data as LlmRow[]) ?? []);
-    setChallenges((chRes.data as ChallengeRow[]) ?? []);
     setDetailLoading(false);
   }, []);
 
@@ -224,14 +206,10 @@ export default function OracleDashboardPage() {
       try {
         const supabase = createClient();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any)
-          .from("aio_assertions")
-          .update({
-            status: "finalized",
-            finalized_outcome: outcome,
-            finalized_at: new Date().toISOString(),
-          })
-          .eq("id", assertionId);
+        const { error } = await (supabase as any).rpc("finalize_aio_assertion", {
+          target_assertion_id: assertionId,
+          outcome: outcome,
+        });
 
         if (!error) {
           await loadAssertions();
@@ -250,32 +228,7 @@ export default function OracleDashboardPage() {
     [expandedId, loadAssertions, loadDetails],
   );
 
-  const isFinalizable = (a: AssertionRow) =>
-    a.status === "challenge_period" &&
-    a.challenge_ends_at &&
-    new Date(a.challenge_ends_at) < new Date();
-  const challengePolicy = [
-    {
-      icon: <RiCheckboxCircleLine className="size-5" />,
-      label: t(pages.oracleChallengeEligibility),
-      value: t(pages.oracleChallengeEligibilityValue),
-    },
-    {
-      icon: <RiShieldCheckLine className="size-5" />,
-      label: t(pages.oracleChallengeBond),
-      value: t(pages.oracleChallengeBondValue),
-    },
-    {
-      icon: <RiAlarmWarningLine className="size-5" />,
-      label: t(pages.oracleChallengeResult),
-      value: t(pages.oracleChallengeResultValue),
-    },
-    {
-      icon: <RiTimerLine className="size-5" />,
-      label: t(pages.oracleChallengeWindow),
-      value: t(pages.oracleChallengeWindowValue),
-    },
-  ];
+  const isFinalizable = (a: AssertionRow) => a.status === "llm_verified";
 
   const aioFeatures = [
     {
@@ -297,9 +250,7 @@ export default function OracleDashboardPage() {
 
   const verifierRewards = [
     t(pages.oracleReward1),
-    t(pages.oracleReward2),
     t(pages.oracleReward3),
-    t(pages.oracleReward4),
   ];
 
   return (
@@ -329,11 +280,7 @@ export default function OracleDashboardPage() {
               value={stats.pending}
               color="bg-amber-500/20 text-amber-300"
             />
-            <StatChip
-              label={t(pages.oracleStatsChallenged)}
-              value={stats.challenged}
-              color="bg-rose-500/20 text-rose-300"
-            />
+
             <StatChip
               label={t(pages.oracleStatsFinalized)}
               value={stats.finalized}
@@ -373,13 +320,13 @@ export default function OracleDashboardPage() {
 
             {/* AIO Pipeline Visual */}
             <div className="mt-5 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-0">
-              {["Assertion", "Evidence", "Multi-LLM", "Challenge", "Finalized"].map(
+              {["근거 URL 제출", "출처·원문 추출", "다중 AI 교차검증", "확정 및 보상"].map(
                 (step, idx) => (
                   <div key={step} className="flex items-center gap-0 sm:flex-1">
                     <div className="flex h-10 flex-1 items-center justify-center rounded-lg border border-border bg-zinc-50 text-xs font-black text-foreground dark:bg-zinc-900/50 sm:rounded-none sm:first:rounded-l-lg sm:last:rounded-r-lg">
                       {step}
                     </div>
-                    {idx < 4 ? (
+                    {idx < 3 ? (
                       <div className="hidden h-px w-3 bg-border sm:block" />
                     ) : null}
                   </div>
@@ -452,36 +399,23 @@ export default function OracleDashboardPage() {
         ) : null}
       </section>
 
-      {/* ─── Challenge Policy ─────────────────── */}
-      <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
-        <div className="flex items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-            <RiShieldCheckLine className="size-5" />
+      {/* ─── Verification Cost ────────────────── */}
+      <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
+        <div className="flex items-center gap-4 px-5 py-4">
+          <div className="flex size-9 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
+            <RiAlarmWarningLine className="size-5" />
           </div>
-          <div className="min-w-0">
-            <h2 className="text-lg font-black text-foreground">
-              {t(pages.oracleChallengePolicy)}
-            </h2>
-            <p className="mt-1 text-sm font-semibold leading-6 text-muted-foreground">
-              {t(pages.oracleChallengePolicyDesc)}
+          <div className="flex-1">
+            <h3 className="text-[15px] font-black text-foreground">
+              {t(pages.oracleVerificationCostTitle)}
+            </h3>
+            <p className="mt-1 text-sm font-medium leading-5 text-muted-foreground">
+              {t(pages.oracleVerificationCostDesc)}
             </p>
           </div>
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {challengePolicy.map((item) => (
-            <div
-              key={item.label}
-              className="rounded-xl border border-border bg-zinc-50 p-3 dark:bg-zinc-900/50"
-            >
-              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-300">
-                {item.icon}
-                <p className="text-sm font-black text-foreground">{item.label}</p>
-              </div>
-              <p className="mt-2 text-sm font-semibold leading-5 text-muted-foreground">
-                {item.value}
-              </p>
-            </div>
-          ))}
+          <div className="shrink-0 rounded-full border border-amber-300/40 bg-amber-500/10 px-4 py-2 text-sm font-black text-amber-600">
+            {t(pages.oracleVerificationCostValue)}
+          </div>
         </div>
       </section>
 
@@ -507,9 +441,7 @@ export default function OracleDashboardPage() {
           {([
             { key: "all", label: `All (${stats.total})` },
             { key: "pending", label: `${t(pages.oracleStatsPending)} (${stats.pending})` },
-            { key: "challenge", label: `${t(pages.oracleStatsChallenged)} (${stats.challenged})` },
-            { key: "finalizable", label: `${t(aio.challenge.finalizable)} (${stats.finalizable})` },
-            { key: "finalized", label: `${t(pages.oracleStatsFinalized)} (${stats.finalized})` },
+            { key: "finalized", label: `${t(dictionary.aio.status.finalized)} (${stats.finalized})` },
           ] as const).map((tab) => (
             <button
               key={tab.key}
@@ -622,21 +554,6 @@ export default function OracleDashboardPage() {
                           <AioLlmResults verifications={llmVerifications} />
                         </div>
 
-                        {/* Challenges */}
-                        <div>
-                          <h3 className="mb-2 text-[13px] font-black text-foreground">
-                            {t(aio.challenge.title)}
-                          </h3>
-                          <AioChallengeSection
-                            challenges={challenges}
-                            canChallenge={a.status === "challenge_period" || a.status === "challenged"}
-                            assertionId={a.id}
-                            onChallengeSubmitted={async () => {
-                              await loadAssertions();
-                              await loadDetails(a.id);
-                            }}
-                          />
-                        </div>
 
                         {/* Finalize Button */}
                         {isFinalizable(a) && (
@@ -651,7 +568,7 @@ export default function OracleDashboardPage() {
                             ) : (
                               <RiCheckboxCircleLine className="size-4" />
                             )}
-                            {finalizingIds.has(a.id) ? t(aio.challenge.finalizing) : t(aio.challenge.finalize)}
+                            {finalizingIds.has(a.id) ? t(aio.resolution.finalizing) : t(aio.resolution.finalize)}
                             <span className="text-[11px] font-medium text-emerald-400">→ {a.asserted_outcome.toUpperCase()}</span>
                           </button>
                         )}
@@ -705,8 +622,6 @@ function StatusBadge({ status }: { status: string }) {
     submitted: { color: "bg-blue-500/10 text-blue-600", label: t(dictionary.aio.status.submitted) },
     evidence_captured: { color: "bg-cyan-500/10 text-cyan-600", label: t(dictionary.aio.status.evidenceCaptured) },
     llm_verified: { color: "bg-indigo-500/10 text-indigo-600", label: t(dictionary.aio.status.llmVerified) },
-    challenge_period: { color: "bg-amber-500/10 text-amber-600", label: t(dictionary.aio.status.challengePeriod) },
-    challenged: { color: "bg-rose-500/10 text-rose-600", label: t(dictionary.aio.status.challenged) },
     finalized: { color: "bg-emerald-500/10 text-emerald-600", label: t(dictionary.aio.status.finalized) },
     rejected: { color: "bg-rose-500/10 text-rose-600", label: t(dictionary.aio.status.rejected) },
   };

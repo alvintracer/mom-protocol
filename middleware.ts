@@ -16,11 +16,13 @@ const SKIP_LOCALE_PREFIXES = [
   "/favicon",
   "/robots",
   "/sitemap",
+  "/ads.txt",
+  "/.well-known",
 ];
 
 function shouldSkipLocale(pathname: string): boolean {
   return SKIP_LOCALE_PREFIXES.some((p) => pathname.startsWith(p)) ||
-    /\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff2?)$/i.test(pathname);
+    /\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|txt|xml|woff2?)$/i.test(pathname);
 }
 
 function pathnameHasLocale(pathname: string): boolean {

@@ -774,13 +774,18 @@ export type Database = {
       };
       platform_vault_overview: {
         Row: {
+          vault_usd: number;
+          total_mom_supply: number;
+          current_rate: number;
+          total_withdrawn_usd: number;
+          pending_withdrawal_usd: number;
+          posted_entry_count: number;
+          updated_at: string | null;
           cumulative_energy: number;
           monthly_energy: number;
           distributed_energy: number;
           current_month: string;
           next_distribution_date: string;
-          posted_entry_count: number;
-          updated_at: string | null;
         };
         Relationships: [];
       };
@@ -887,6 +892,23 @@ export type Database = {
           p_metadata?: Json;
         };
         Returns: string;
+      };
+      get_mom_rate: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      request_withdrawal: {
+        Args: {
+          p_mom_amount: number;
+          p_wallet_id?: string | null;
+        };
+        Returns: Json;
+      };
+      cancel_withdrawal: {
+        Args: {
+          p_withdrawal_id: string;
+        };
+        Returns: void;
       };
     };
     Enums: {

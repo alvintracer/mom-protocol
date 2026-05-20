@@ -587,6 +587,9 @@ export default function ProfilePage() {
 
       {/* Buy MOM Section */}
       <BuyMomSection userId={userId} ownedMom={Number(profile?.mom_energy ?? 0)} />
+
+      {/* Withdraw MOM Section */}
+      <WithdrawMomSection userId={userId} ownedMom={Number(profile?.mom_energy ?? 0)} />
       </>
       ) : null}
     </div>
@@ -976,7 +979,7 @@ function WalletSection({ userId }: { userId: string | null }) {
 
 // ─── Buy MOM Section ────────────────────────────
 
-const MOM_PER_USD = 100;
+
 const PAY_CURRENCIES = ["btc", "eth", "usdt", "usdc", "sol", "matic", "trx", "bnb"];
 
 type PaymentRow = {
@@ -1010,11 +1013,22 @@ function BuyMomSection({
   const [notice, setNotice] = useState<string | null>(null);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [momRate, setMomRate] = useState<number>(0.001);
   const [monthlyContribution, setMonthlyContribution] = useState<MonthlyContribution>({
     userEnergy: 0,
     totalEnergy: 0,
     ratio: 0,
   });
+
+  // Fetch dynamic rate
+  useEffect(() => {
+    fetch("/api/rate")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.rate) setMomRate(Number(data.rate));
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -1103,7 +1117,7 @@ function BuyMomSection({
   if (!userId) return null;
 
   const numAmount = parseFloat(amount) || 0;
-  const momEnergy = Math.floor(numAmount * MOM_PER_USD);
+  const momEnergy = momRate > 0 ? Math.floor(numAmount / momRate) : 0;
 
   const statusColors: Record<string, string> = {
     pending: "bg-amber-500/10 text-amber-600",
@@ -1131,12 +1145,12 @@ function BuyMomSection({
             accent
           />
           <MiniStat
-            label={t(p.monthlyContributionRatio)}
-            value={`${monthlyContribution.ratio.toFixed(2)}%`}
+            label={t(p.expectedVaultShare)}
+            value={`$${(ownedMom * momRate).toFixed(2)}`}
           />
           <MiniStat
-            label={t(p.expectedVaultShare)}
-            value={`${Math.round(monthlyContribution.userEnergy).toLocaleString()} MOM`}
+            label={t(p.buyMomRate)}
+            value={`$${momRate.toFixed(4)}/MOM`}
           />
         </div>
 
@@ -1242,6 +1256,274 @@ function MiniStat({
       <p className={`mt-1 text-sm font-black tabular-nums ${accent ? "text-blue-700 dark:text-blue-300" : "text-foreground"}`}>
         {value}
       </p>
+    </div>
+  );
+}
+
+// ─── Withdraw MOM Section ────────────────────────────
+
+type WithdrawalRow = {
+  id: string;
+  mom_amount: number;
+  rate_at_request: number;
+  usd_amount: number;
+  spread: number;
+  status: string;
+  created_at: string;
+};
+
+function WithdrawMomSection({
+  userId,
+  ownedMom,
+}: {
+  userId: string | null;
+  ownedMom: number;
+}) {
+  const { dictionary, t } = useI18n();
+  const p = dictionary.profile;
+  const [amount, setAmount] = useState("1000");
+  const [walletId, setWalletId] = useState("");
+  const [wallets, setWallets] = useState<WalletRow[]>([]);
+  const [processing, setProcessing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRow[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [momRate, setMomRate] = useState<number>(0.001);
+  const [tierData, setTierData] = useState<{ rank: number; spread: number; name: string } | null>(null);
+
+  // Fetch dynamic rate & user data
+  useEffect(() => {
+    if (!userId) return;
+    const supabase = createClient();
+    
+    fetch("/api/rate")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.rate) setMomRate(Number(data.rate));
+      })
+      .catch(() => {});
+
+    supabase
+      .from("wallets")
+      .select("id, address, label, is_primary")
+      .eq("user_id", userId)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setWallets(data as WalletRow[]);
+          const primary = data.find((w: any) => w.is_primary) || data[0];
+          setWalletId(primary.id);
+        }
+      });
+
+    (supabase as any)
+      .from("platform_contributor_rankings")
+      .select("percent_rank")
+      .eq("user_id", userId)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data) {
+          const pr = data.percent_rank;
+          if (pr <= 0.05) setTierData({ rank: pr, spread: 0.03, name: "Gold" });
+          else if (pr <= 0.20) setTierData({ rank: pr, spread: 0.04, name: "Silver" });
+          else setTierData({ rank: pr, spread: 0.05, name: "Member" });
+        } else {
+          setTierData({ rank: 1, spread: 0.05, name: "Member" });
+        }
+      });
+
+    loadWithdrawals();
+  }, [userId]);
+
+  function loadWithdrawals() {
+    if (!userId) return;
+    const supabase = createClient();
+    (supabase as any)
+      .from("withdrawal_requests")
+      .select("id, mom_amount, rate_at_request, usd_amount, spread, status, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(10)
+      .then(({ data }: any) => {
+        if (data) setWithdrawals(data as WithdrawalRow[]);
+      });
+  }
+
+  async function handleWithdraw() {
+    if (!userId) return;
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount < 1000) return;
+    if (!walletId) {
+      setNotice(t(p.withdrawNoWallets));
+      return;
+    }
+
+    setProcessing(true);
+    setNotice(null);
+
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("request_withdrawal", {
+      p_mom_amount: numAmount,
+      p_wallet_id: walletId,
+    });
+
+    if (error) {
+      if (error.message.includes("insufficient")) setNotice(t(p.withdrawInsufficient));
+      else if (error.message.includes("limit")) setNotice(t(p.withdrawLimitExceeded));
+      else setNotice(error.message);
+    } else {
+      setNotice(t(p.withdrawSuccess));
+      setAmount("1000");
+      loadWithdrawals();
+    }
+    setProcessing(false);
+  }
+
+  async function handleCancel(id: string) {
+    if (!userId) return;
+    const supabase = createClient();
+    const { error } = await supabase.rpc("cancel_withdrawal", { p_withdrawal_id: id });
+    if (!error) {
+      loadWithdrawals();
+    }
+  }
+
+  if (!userId) return null;
+
+  const numAmount = parseFloat(amount) || 0;
+  const spread = tierData?.spread ?? 0.05;
+  const expectedUsdc = numAmount * momRate * (1 - spread);
+
+  const statusColors: Record<string, string> = {
+    queued: "bg-amber-500/10 text-amber-600",
+    processing: "bg-blue-500/10 text-blue-600",
+    completed: "bg-emerald-500/10 text-emerald-600",
+    failed: "bg-rose-500/10 text-rose-600",
+    cancelled: "bg-zinc-500/10 text-zinc-600",
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-6 pb-20">
+      <div className="rounded-2xl border border-border bg-background p-6 shadow-sm">
+        <h2 className="text-lg font-black text-foreground">{t(p.withdrawMom)}</h2>
+        <p className="mt-1 text-sm font-medium leading-6 text-muted-foreground">
+          {t(p.withdrawMomDesc)}
+        </p>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <MiniStat
+            label={t(p.withdrawTier)}
+            value={tierData?.name ?? "Member"}
+            accent
+          />
+          <MiniStat
+            label={t(p.withdrawSpread)}
+            value={`${(spread * 100).toFixed(0)}%`}
+          />
+          <MiniStat
+            label={t(p.buyMomRate)}
+            value={`$${momRate.toFixed(4)}/MOM`}
+          />
+        </div>
+
+        {notice && (
+          <p className="mt-3 text-sm font-bold text-blue-600">{notice}</p>
+        )}
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-3">
+          <div>
+            <label className="mb-1.5 block text-[12px] font-black text-foreground">{t(p.withdrawAmount)}</label>
+            <div className="relative">
+              <input
+                type="number"
+                min="1000"
+                step="100"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="h-11 w-full rounded-xl border border-border bg-zinc-50 px-3 text-sm font-bold text-foreground outline-none focus:border-blue-500 dark:bg-zinc-900/50"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">MOM</span>
+            </div>
+            <p className="mt-1.5 text-[10px] font-medium text-muted-foreground">{t(p.withdrawMinAmount)}</p>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[12px] font-black text-foreground">{t(p.withdrawSelectWallet)}</label>
+            <select
+              value={walletId}
+              onChange={(e) => setWalletId(e.target.value)}
+              className="h-11 w-full rounded-xl border border-border bg-zinc-50 px-3 text-sm font-bold text-foreground outline-none appearance-none focus:border-blue-500 dark:bg-zinc-900/50"
+            >
+              {wallets.length === 0 ? (
+                <option value="">{t(p.withdrawNoWallets)}</option>
+              ) : (
+                wallets.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.label ? `${w.label} - ` : ""}{w.address.slice(0,6)}...{w.address.slice(-4)}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[12px] font-black text-foreground">{t(p.withdrawUsdcExpected)}</label>
+            <div className="flex h-11 items-center rounded-xl border border-blue-500/25 bg-blue-50/50 px-3 dark:bg-blue-500/10">
+              <span className="text-sm font-black tabular-nums text-blue-700 dark:text-blue-300">
+                ${Math.max(0, expectedUsdc).toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          disabled={processing || numAmount < 1000 || !walletId}
+          onClick={handleWithdraw}
+          className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-foreground px-6 text-sm font-black text-background transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {processing ? t(p.withdrawProcessing) : t(p.withdrawSubmitBtn)}
+        </button>
+
+        {/* Withdrawal History */}
+        {withdrawals.length > 0 && (
+          <div className="mt-6 border-t border-border pt-4">
+            <button
+              type="button"
+              onClick={() => setShowHistory((v) => !v)}
+              className="text-sm font-black text-foreground hover:text-blue-600 transition-colors"
+            >
+              {t(p.withdrawHistory)} ({withdrawals.length})
+            </button>
+            {showHistory && (
+              <div className="mt-3 space-y-2">
+                {withdrawals.map((req) => (
+                  <div key={req.id} className="flex items-center justify-between rounded-xl border border-border bg-zinc-50 p-3 dark:bg-zinc-900/50">
+                    <div>
+                      <p className="text-sm font-bold text-foreground">
+                        {req.mom_amount.toLocaleString()} MOM → ${req.usd_amount}
+                      </p>
+                      <p className="text-[10px] font-medium text-muted-foreground">
+                        Rate: ${req.rate_at_request} · Spread: {req.spread * 100}% · {new Date(req.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${statusColors[req.status] ?? "bg-zinc-500/10 text-zinc-600"}`}>
+                        {req.status === 'queued' ? t(p.withdrawQueue) : req.status === 'processing' ? t(p.withdrawProcessing) : req.status === 'completed' ? t(p.withdrawCompleted) : req.status === 'cancelled' ? t(p.withdrawCancelled) : t(p.withdrawFailed)}
+                      </span>
+                      {req.status === 'queued' && (
+                        <button
+                          onClick={() => handleCancel(req.id)}
+                          className="text-[10px] font-bold text-red-500 hover:underline"
+                        >
+                          {t(p.withdrawCancelBtn)}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

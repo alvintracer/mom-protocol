@@ -12,8 +12,9 @@ import { ThemeToggle } from "@/shared/components/ThemeToggle";
 import { LanguageSelect } from "@/shared/i18n/LanguageSelect";
 
 type PlatformVaultOverview = {
-  cumulative_energy: number;
-  monthly_energy: number;
+  vault_usd: number;
+  total_mom_supply: number;
+  current_rate: number;
 };
 
 export function TopBar() {
@@ -21,7 +22,7 @@ export function TopBar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeFeed = searchParams.get("feed") === "following" ? "following" : "for-you";
-  const [platformStats, setPlatformStats] = useState<{ total: number; monthly: number } | null>(null);
+  const [platformStats, setPlatformStats] = useState<{ vault: number; supply: number; rate: number } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -30,14 +31,15 @@ export function TopBar() {
     async function loadPlatformStats() {
       const { data } = await supabase
         .from("platform_vault_overview")
-        .select("cumulative_energy, monthly_energy")
+        .select("vault_usd, total_mom_supply, current_rate")
         .maybeSingle();
 
       if (mounted) {
         const overview = data as PlatformVaultOverview | null;
         setPlatformStats({
-          total: Number(overview?.cumulative_energy ?? 0),
-          monthly: Number(overview?.monthly_energy ?? 0),
+          vault: Number(overview?.vault_usd ?? 0),
+          supply: Number(overview?.total_mom_supply ?? 0),
+          rate: Number(overview?.current_rate ?? 0.001),
         });
       }
     }
@@ -60,21 +62,24 @@ export function TopBar() {
           {platformStats !== null ? (
             <Link href="/rewards" className="flex min-w-0 items-center gap-1.5 rounded-lg border border-blue-200/50 bg-blue-50 px-3 py-1.5 transition-colors hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:hover:bg-blue-500/20">
               <span className="text-[12px] font-bold tracking-tight text-blue-600 dark:text-blue-400 whitespace-nowrap">
-                {t(dictionary.topBar.platformEnergy)}
-              </span>
-              <div className="mx-1 h-3 w-px bg-blue-200 dark:bg-blue-800" />
-              <span className="hidden sm:inline text-[12px] font-bold tracking-tight text-blue-600 dark:text-blue-400 whitespace-nowrap">
-                {t(dictionary.topBar.platformCumulative)}
+                {t(dictionary.topBar.vault)}
               </span>
               <span className="truncate text-[13px] font-black text-blue-700 dark:text-blue-300">
-                {formatEnergy(platformStats.total)}
+                ${formatEnergy(platformStats.vault)}
               </span>
               <div className="mx-1 h-3 w-px bg-blue-200 dark:bg-blue-800" />
               <span className="hidden sm:inline text-[12px] font-bold tracking-tight text-blue-600 dark:text-blue-400 whitespace-nowrap">
-                {t(dictionary.topBar.platformMonthly)}
+                {t(dictionary.topBar.totalSupply)}
               </span>
-              <span className="hidden sm:inline truncate text-[13px] font-black text-emerald-600 dark:text-emerald-400">
-                {formatEnergy(platformStats.monthly)}
+              <span className="hidden sm:inline truncate text-[13px] font-black text-blue-700 dark:text-blue-300">
+                {formatEnergy(platformStats.supply)} <span className="text-[10px] text-blue-600/70">MOM</span>
+              </span>
+              <div className="hidden sm:block mx-1 h-3 w-px bg-blue-200 dark:bg-blue-800" />
+              <span className="hidden md:inline text-[12px] font-bold tracking-tight text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                {t(dictionary.topBar.rate)}
+              </span>
+              <span className="hidden md:inline truncate text-[13px] font-black text-emerald-600 dark:text-emerald-400">
+                ${platformStats.rate.toFixed(4)}
               </span>
             </Link>
           ) : (

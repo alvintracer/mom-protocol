@@ -976,7 +976,7 @@ function WalletSection({ userId }: { userId: string | null }) {
 
 // ─── Buy MOM Section ────────────────────────────
 
-const MOM_PER_USD = 100;
+
 const PAY_CURRENCIES = ["btc", "eth", "usdt", "usdc", "sol", "matic", "trx", "bnb"];
 
 type PaymentRow = {
@@ -1010,11 +1010,22 @@ function BuyMomSection({
   const [notice, setNotice] = useState<string | null>(null);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [momRate, setMomRate] = useState<number>(0.001);
   const [monthlyContribution, setMonthlyContribution] = useState<MonthlyContribution>({
     userEnergy: 0,
     totalEnergy: 0,
     ratio: 0,
   });
+
+  // Fetch dynamic rate
+  useEffect(() => {
+    fetch("/api/rate")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.rate) setMomRate(Number(data.rate));
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -1103,7 +1114,7 @@ function BuyMomSection({
   if (!userId) return null;
 
   const numAmount = parseFloat(amount) || 0;
-  const momEnergy = Math.floor(numAmount * MOM_PER_USD);
+  const momEnergy = momRate > 0 ? Math.floor(numAmount / momRate) : 0;
 
   const statusColors: Record<string, string> = {
     pending: "bg-amber-500/10 text-amber-600",
@@ -1131,12 +1142,12 @@ function BuyMomSection({
             accent
           />
           <MiniStat
-            label={t(p.monthlyContributionRatio)}
-            value={`${monthlyContribution.ratio.toFixed(2)}%`}
+            label={t(p.expectedVaultShare)}
+            value={`$${(ownedMom * momRate).toFixed(2)}`}
           />
           <MiniStat
-            label={t(p.expectedVaultShare)}
-            value={`${Math.round(monthlyContribution.userEnergy).toLocaleString()} MOM`}
+            label={t(p.buyMomRate)}
+            value={`$${momRate.toFixed(4)}/MOM`}
           />
         </div>
 
