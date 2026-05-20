@@ -673,7 +673,7 @@ function createFallbackRule(id: string, title: string, summary: string): Attenti
     challenge_period_seconds: 259200,
     min_evidence_count: 1,
     min_publisher_trust: 0.1,
-    bond_amount: 0,
+    bond_amount: 5,
     bond_currency: "MOM_POINT",
     oracle_config: {},
     prompt_version: null,

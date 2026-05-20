@@ -86,28 +86,37 @@ export function AioAssertionForm({
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error("auth");
 
+      // Call server-side RPC that handles 5 MOM energy deduction + assertion insert
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: assertion, error: insertErr } = await (supabase as any)
-        .from("aio_assertions")
-        .insert({
-          event_id: eventId,
-          rule_id: ruleId,
-          proposer_id: userData.user.id,
-          claim_text: claimText.trim(),
-          asserted_outcome: selectedOutcome,
-          bond_amount: bondAmount,
-          status: "submitted",
-        })
-        .select("id")
-        .single();
+      const { data: assertionId, error: rpcError } = await (supabase as any).rpc(
+        "submit_aio_assertion",
+        {
+          p_event_id: eventId,
+          p_rule_id: ruleId,
+          p_claim_text: claimText.trim(),
+          p_asserted_outcome: selectedOutcome,
+          p_original_language: "ko",
+        },
+      );
 
-      if (insertErr || !assertion) throw insertErr;
+      if (rpcError) {
+        const errMsg = rpcError.message?.replace(/^.*: /, "").trim();
+        if (errMsg === "insufficient_mom_energy") {
+          setError(t(a.insufficientEnergy));
+        } else {
+          setError(errMsg || "Failed");
+        }
+        setSubmitting(false);
+        return;
+      }
+
+      if (!assertionId) throw new Error("no_assertion_id");
 
       const validUrls = evidenceUrls.filter((u) => u.trim().startsWith("http"));
       const { data: verifyData, error: verifyError } =
         await supabase.functions.invoke<AioVerifyResponse>("aio-verify", {
           body: {
-            assertion_id: (assertion as { id: string }).id,
+            assertion_id: assertionId,
             evidence_urls: validUrls.map((url) => url.trim()),
           },
         });

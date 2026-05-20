@@ -404,6 +404,11 @@ export const dictionary = {
         "Assertion was saved, but AIO verification failed to run.",
         "La aserción se guardó, pero la verificación AIO no se pudo ejecutar.",
       ),
+      insufficientEnergy: text(
+        "MOM Energy가 부족합니다. 검증 제출에는 5 MOM Energy가 필요합니다.",
+        "Insufficient MOM Energy. Submitting a verification requires 5 MOM Energy.",
+        "MOM Energy insuficiente. Se requieren 5 MOM Energy para enviar una verificación.",
+      ),
       empty: text(
         "아직 제출된 결과가 없습니다.",
         "No assertions have been submitted yet.",
