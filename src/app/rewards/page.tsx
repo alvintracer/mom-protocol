@@ -47,8 +47,8 @@ export default function RewardsPage() {
     async function loadData() {
       const [overviewRes, historyRes, rankingsRes] = await Promise.all([
         supabase.from("platform_vault_overview").select("vault_usd, total_mom_supply, current_rate").maybeSingle(),
-        supabase.from("platform_rate_history").select("*").order("snapshot_date", { ascending: true }),
-        supabase.from("platform_contributor_rankings").select("*").order("rank", { ascending: true }).limit(50),
+        (supabase as any).from("platform_rate_history").select("*").order("snapshot_date", { ascending: true }),
+        (supabase as any).from("platform_contributor_rankings").select("*").order("rank", { ascending: true }).limit(50),
       ]);
 
       if (!mounted) return;

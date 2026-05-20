@@ -219,7 +219,8 @@ function AdSenseUnit({ client, slot, format }: { client: string; slot: string; f
     // Give the <ins> element a tick to mount, then push
     const timer = setTimeout(tryPush, 200);
     return () => clearTimeout(timer);
-  }, [slot]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <ins
