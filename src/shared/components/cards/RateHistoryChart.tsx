@@ -40,7 +40,7 @@ export function RateHistoryChart({ data }: { data: RateHistory[] }) {
     return (
       <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-border bg-background">
         <p className="text-sm font-medium text-muted-foreground">
-          {t(dictionary.vault.noDataYet ?? { ko: "아직 환율 데이터가 없습니다.", en: "No rate data yet.", es: "Aún no hay datos de tasa." })}
+          {t({ ko: "아직 환율 데이터가 없습니다.", en: "No rate data yet.", es: "Aún no hay datos de tasa." })}
         </p>
       </div>
     );
@@ -85,7 +85,7 @@ export function RateHistoryChart({ data }: { data: RateHistory[] }) {
               fontSize: '13px'
             }}
             itemStyle={{ color: '#10b981', fontWeight: 900 }}
-            formatter={(value: number) => [`$${value.toFixed(4)}`, t(dictionary.topBar.rate)]}
+            formatter={(value: any) => [`$${Number(value).toFixed(4)}`, t(dictionary.topBar.rate)]}
             labelStyle={{ color: 'var(--muted-foreground)', marginBottom: '4px' }}
           />
           <Area 

@@ -44,7 +44,6 @@ type Contributor = {
 export function AttentionEnergyGauge({
   attentionScore,
   viewCount = 0,
-  visitorCount = 0,
   donationTotal = 0,
 }: {
   attentionScore: number;
@@ -92,11 +91,7 @@ export function AttentionEnergyGauge({
           value={formatCompact(viewCount)}
           label={t(m.energyGauge.views)}
         />
-        <MiniStat
-          icon={<RiGroupLine className="size-3.5" />}
-          value={formatCompact(visitorCount)}
-          label={t(m.energyGauge.visitors)}
-        />
+        
         <MiniStat
           icon={<RiHeartFill className="size-3.5 text-rose-400" />}
           value={`${formatCompact(donationTotal)} MOM`}

@@ -23,8 +23,6 @@ type AssertionStatus =
   | "submitted"
   | "evidence_captured"
   | "llm_verified"
-  | "challenge_period"
-  | "challenged"
   | "finalized"
   | "rejected"
   | "cancelled";
@@ -56,13 +54,7 @@ type EvidenceItem = {
   captured_at: string;
 };
 
-type Challenge = {
-  id: string;
-  counter_claim_text: string;
-  counter_outcome: string | null;
-  status: string;
-  created_at: string;
-};
+
 
 // ─── 1. Status Pipeline ───────────────────────────
 
@@ -71,7 +63,6 @@ const PIPELINE_STEPS: AssertionStatus[] = [
   "open_verification_window",
   "evidence_captured",
   "llm_verified",
-  "challenge_period",
   "finalized",
 ];
 
@@ -85,20 +76,17 @@ export function AioStatusPipeline({ status }: { status: AssertionStatus }) {
     submitted: t(s.submitted),
     evidence_captured: t(s.evidenceCaptured),
     llm_verified: t(s.llmVerified),
-    challenge_period: t(s.challengePeriod),
     finalized: t(s.finalized),
   };
 
   const displayStatus =
     status === "submitted"
       ? "evidence_captured"
-      : status === "challenged"
-        ? "challenge_period"
-        : status === "rejected" || status === "cancelled"
-          ? "llm_verified"
-          : status;
+      : status === "rejected" || status === "cancelled"
+        ? "llm_verified"
+        : status;
   const currentIdx = PIPELINE_STEPS.indexOf(displayStatus);
-  const isRejected = status === "rejected" || status === "challenged";
+  const isRejected = status === "rejected";
 
   return (
     <div className="flex items-center gap-1">
@@ -249,188 +237,6 @@ export function AioLlmResults({ verifications }: { verifications: LlmVerificatio
           </div>
         );
       })}
-    </div>
-  );
-}
-
-// ─── 4. Challenge Section ─────────────────────────
-
-export function AioChallengeSection({
-  challenges,
-  canChallenge,
-  assertionId,
-  onChallengeSubmitted,
-}: {
-  challenges: Challenge[];
-  canChallenge: boolean;
-  assertionId?: string;
-  onChallengeSubmitted?: () => void;
-}) {
-  const { dictionary, t } = useI18n();
-  const c = dictionary.aio.challenge;
-  const [showForm, setShowForm] = useState(false);
-  const [counterClaim, setCounterClaim] = useState("");
-  const [counterEvidence, setCounterEvidence] = useState("");
-  const [counterOutcome, setCounterOutcome] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
-  const errorMap: Record<string, string> = {
-    not_authenticated: t(c.errorNotAuthenticated),
-    mom_energy_too_low: t(c.errorMomEnergyTooLow),
-    account_too_new: t(c.errorAccountTooNew),
-    challenge_already_submitted: t(c.errorAlreadySubmitted),
-    daily_challenge_limit_reached: t(c.errorDailyLimit),
-    challenge_window_closed: t(c.errorWindowClosed),
-    challenge_window_not_open: t(c.errorWindowClosed),
-    challenge_cost_required: t(c.errorMomEnergyTooLow),
-    trust_score_too_low: t(c.errorMomEnergyTooLow),
-  };
-
-  async function handleSubmit() {
-    if (!assertionId || !counterClaim.trim()) return;
-    setSubmitting(true);
-    setError(null);
-
-    try {
-      const { createClient } = await import("@/shared/lib/supabase/client");
-      const supabase = createClient();
-      const { error: rpcError } = await supabase.rpc("submit_aio_challenge", {
-        target_assertion_id: assertionId,
-        counter_claim_text: counterClaim.trim(),
-        counter_outcome: counterOutcome.trim() || null,
-        original_language: "ko",
-      });
-
-      if (rpcError) {
-        const errKey = rpcError.message?.replace(/^.*: /, "").trim();
-        setError(errorMap[errKey] ?? t(c.errorGeneric));
-        setSubmitting(false);
-        return;
-      }
-
-      setSuccess(true);
-      setShowForm(false);
-      setCounterClaim("");
-      setCounterEvidence("");
-      setCounterOutcome("");
-      onChallengeSubmitted?.();
-    } catch {
-      setError(t(c.errorGeneric));
-    }
-    setSubmitting(false);
-  }
-
-  return (
-    <div className="space-y-3">
-      {challenges.length > 0 ? (
-        challenges.map((ch) => (
-          <div key={ch.id} className="rounded-xl border border-rose-400/30 bg-rose-500/5 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-black text-rose-600">{t(c.title)}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${
-                ch.status === "accepted"
-                  ? "bg-emerald-500/10 text-emerald-600"
-                  : ch.status === "rejected"
-                    ? "bg-rose-500/10 text-rose-600"
-                    : "bg-amber-500/10 text-amber-600"
-              }`}>
-                {ch.status}
-              </span>
-            </div>
-            <p className="mt-1 text-[12px] font-medium text-foreground">{ch.counter_claim_text}</p>
-          </div>
-        ))
-      ) : (
-        <p className="text-center text-sm font-medium text-muted-foreground">{t(c.noChallenges)}</p>
-      )}
-
-      {success && (
-        <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/5 p-3 text-center">
-          <p className="text-sm font-bold text-emerald-600">{t(c.submitted)}</p>
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-xl border border-rose-400/30 bg-rose-500/5 p-3 text-center">
-          <p className="text-sm font-bold text-rose-600">{error}</p>
-        </div>
-      )}
-
-      {canChallenge && !showForm && !success && (
-        <button
-          onClick={() => { setShowForm(true); setError(null); }}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/5 px-4 py-2.5 text-sm font-black text-rose-600 transition-colors hover:bg-rose-500/10 dark:text-rose-400"
-        >
-          <RiShieldCheckLine className="size-4" />
-          {t(c.submitChallenge)}
-          <span className="text-[11px] font-medium text-rose-400">({t(c.cost)})</span>
-        </button>
-      )}
-
-      {showForm && (
-        <div className="space-y-3 rounded-xl border border-rose-400/30 bg-rose-500/5 p-4">
-          <div>
-            <label className="mb-1.5 block text-[12px] font-black text-foreground">
-              {t(c.counterClaim)} *
-            </label>
-            <textarea
-              value={counterClaim}
-              onChange={(e) => setCounterClaim(e.target.value)}
-              placeholder={t(c.counterClaimPlaceholder)}
-              rows={3}
-              className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground focus:border-rose-400"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[12px] font-black text-foreground">
-              {t(c.counterEvidence)}
-            </label>
-            <input
-              type="url"
-              value={counterEvidence}
-              onChange={(e) => setCounterEvidence(e.target.value)}
-              placeholder={t(c.counterEvidencePlaceholder)}
-              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground focus:border-rose-400"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[12px] font-black text-foreground">
-              {t(c.counterOutcome)}
-            </label>
-            <input
-              value={counterOutcome}
-              onChange={(e) => setCounterOutcome(e.target.value)}
-              placeholder="e.g. NO"
-              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground focus:border-rose-400"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <button
-              type="button"
-              onClick={() => { setShowForm(false); setError(null); }}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-bold text-muted-foreground transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
-            >
-              {t(c.cancelForm)}
-            </button>
-            <button
-              type="button"
-              disabled={submitting || !counterClaim.trim()}
-              onClick={handleSubmit}
-              className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-5 py-2 text-sm font-black text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {submitting ? (
-                <RiLoader4Line className="size-4 animate-spin" />
-              ) : (
-                <RiShieldCheckLine className="size-4" />
-              )}
-              {submitting ? t(c.submitting) : t(c.submitChallenge)}
-            </button>
-          </div>
-          <p className="text-center text-[11px] font-medium text-rose-400">{t(c.cost)}</p>
-        </div>
-      )}
     </div>
   );
 }
