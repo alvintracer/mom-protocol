@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   RiArrowRightUpLine,
+  RiArticleLine,
   RiFireLine,
+  RiFlashlightLine,
   RiGlobalLine,
   RiHashtag,
   RiMoreFill,
@@ -25,11 +28,14 @@ type AttentionRule = Database["public"]["Tables"]["attention_rules"]["Row"];
 type TopicRow = Database["public"]["Tables"]["topics"]["Row"];
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
+type PostRow = Database["public"]["Tables"]["posts"]["Row"];
+
 /* ─── search result types ─── */
 type SearchResult = {
   attentions: AttentionCluster[];
   topics: TopicRow[];
   users: Profile[];
+  posts: (PostRow & { authorName?: string })[];
 };
 
 /* ─── outcome option helpers ─── */
@@ -44,12 +50,14 @@ function normalizeOutcomes(raw: AttentionRule["supported_outcomes"]): string[] {
 
 export function RightSidebar() {
   const { dictionary, language, t } = useI18n();
+  const router = useRouter();
 
   /* ─── Live data state ─── */
   const [attentions, setAttentions] = useState<AttentionCluster[]>([]);
   const [attentionRules, setAttentionRules] = useState<Record<string, string[]>>({});
   const [topics, setTopics] = useState<TopicRow[]>([]);
   const [leaders, setLeaders] = useState<Profile[]>([]);
+  const [recommendedAttentions, setRecommendedAttentions] = useState<AttentionCluster[]>([]);
 
   type SidebarMarket = {
     id: string;
@@ -166,6 +174,55 @@ export function RightSidebar() {
       if (mounted && profileData && profileData.length > 0) {
         setLeaders(profileData);
       }
+
+      /* ── Recommended Attentions (based on user interests) ── */
+      const { data: authData } = await supabase.auth.getUser();
+      const currentUser = authData?.user;
+      if (currentUser) {
+        // Get user's top interest topic_ids
+        const { data: interests } = await supabase
+          .from("user_interests")
+          .select("topic_id")
+          .eq("user_id", currentUser.id)
+          .gt("score", 0.5)
+          .order("score", { ascending: false })
+          .limit(10);
+        const topicIds = (interests ?? []).map((i) => i.topic_id);
+
+        if (topicIds.length > 0) {
+          // Find attention clusters linked to these topics
+          const { data: attTopicLinks } = await supabase
+            .from("content_topics")
+            .select("target_id")
+            .eq("target_type", "attention")
+            .in("topic_id", topicIds)
+            .limit(20);
+          const candidateIds = [...new Set((attTopicLinks ?? []).map((l) => l.target_id))];
+
+          if (candidateIds.length > 0) {
+            // Exclude already-joined attentions
+            const { data: joined } = await supabase
+              .from("attention_memberships")
+              .select("attention_cluster_id")
+              .eq("user_id", currentUser.id);
+            const joinedSet = new Set((joined ?? []).map((j) => j.attention_cluster_id));
+            // Also exclude attentions already in today's list
+            const todaySet = new Set((clusterData ?? []).map((c) => c.id));
+            const filteredIds = candidateIds.filter((id) => !joinedSet.has(id) && !todaySet.has(id)).slice(0, 3);
+
+            if (filteredIds.length > 0) {
+              const { data: recAtts } = await supabase
+                .from("attention_clusters")
+                .select("*")
+                .in("id", filteredIds)
+                .order("attention_score", { ascending: false });
+              if (mounted && recAtts) {
+                setRecommendedAttentions(recAtts);
+              }
+            }
+          }
+        }
+      }
     }
 
     loadData();
@@ -198,30 +255,42 @@ export function RightSidebar() {
     const supabase = createClient();
     const searchPattern = `%${q.trim()}%`;
 
-    const [attentionRes, topicRes, userRes] = await Promise.all([
+    const [attentionRes, topicRes, userRes, postRes] = await Promise.all([
       supabase
         .from("attention_clusters")
         .select("*")
         .or(`title.ilike.${searchPattern},description.ilike.${searchPattern},slug.ilike.${searchPattern}`)
         .order("attention_score", { ascending: false })
-        .limit(5),
+        .limit(3),
       supabase
         .from("topics")
         .select("*")
         .or(`canonical_label.ilike.${searchPattern},slug.ilike.${searchPattern}`)
-        .limit(5),
+        .limit(3),
       supabase
         .from("profiles")
         .select("*")
         .or(`handle.ilike.${searchPattern},display_name.ilike.${searchPattern}`)
         .order("mom_energy", { ascending: false })
-        .limit(5),
+        .limit(3),
+      supabase
+        .from("posts")
+        .select("*, profiles!posts_user_id_fkey(display_name, handle)")
+        .eq("visibility", "public")
+        .eq("is_deleted", false)
+        .or(`original_title.ilike.${searchPattern},original_body.ilike.${searchPattern}`)
+        .order("created_at", { ascending: false })
+        .limit(3),
     ]);
 
     setSearchResults({
       attentions: attentionRes.data ?? [],
       topics: topicRes.data ?? [],
       users: userRes.data ?? [],
+      posts: (postRes.data ?? []).map((p: Record<string, unknown>) => ({
+        ...(p as PostRow),
+        authorName: ((p.profiles as Record<string, string> | null)?.display_name ?? (p.profiles as Record<string, string> | null)?.handle ?? "anon"),
+      })) as SearchResult["posts"],
     });
     setIsSearching(false);
   }, []);
@@ -250,6 +319,13 @@ export function RightSidebar() {
           type="text"
           value={query}
           onChange={(e) => handleSearchChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && query.trim()) {
+              router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+              setQuery("");
+              setSearchResults(null);
+            }
+          }}
           placeholder={t(dictionary.topBar.search)}
           className="h-10 w-full rounded-full border border-transparent bg-zinc-100 dark:bg-zinc-900 pl-10 pr-4 text-[14px] outline-none transition-all placeholder:text-muted-foreground focus:border-blue-500 focus:bg-background focus:ring-1 focus:ring-blue-500/30"
         />
@@ -328,13 +404,48 @@ export function RightSidebar() {
                   ))}
                 </div>
               ) : null}
+              {/* Posts */}
+              {searchResults.posts.length > 0 ? (
+                <div>
+                  <p className="px-4 pt-3 pb-1 text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+                    {t(dictionary.sidebar.searchPosts)}
+                  </p>
+                  {searchResults.posts.map((p) => (
+                    <Link
+                      key={p.id}
+                      href={`/posts/${p.id}`}
+                      className="block px-4 py-2 transition-colors hover:bg-zinc-100/80 dark:hover:bg-zinc-800/40"
+                      onClick={() => { setQuery(""); setSearchResults(null); }}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <RiArticleLine className="size-3 text-muted-foreground shrink-0" />
+                        <span className="text-[11px] font-bold text-muted-foreground">{p.authorName}</span>
+                      </div>
+                      <p className="text-[13px] font-bold text-foreground line-clamp-1 mt-0.5">
+                        {p.original_title || (p.original_body ?? "").slice(0, 80)}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
               {/* No results */}
               {searchResults.attentions.length === 0 &&
                searchResults.topics.length === 0 &&
-               searchResults.users.length === 0 ? (
+               searchResults.users.length === 0 &&
+               searchResults.posts.length === 0 ? (
                 <p className="px-4 py-6 text-center text-sm font-medium text-muted-foreground">
                   {t(dictionary.sidebar.noResults)}
                 </p>
+              ) : null}
+              {/* View all link */}
+              {(searchResults.attentions.length > 0 || searchResults.topics.length > 0 || searchResults.users.length > 0 || searchResults.posts.length > 0) ? (
+                <Link
+                  href={`/search?q=${encodeURIComponent(query.trim())}`}
+                  className="block border-t border-border px-4 py-3 text-center text-[13px] font-bold text-blue-600 transition-colors hover:bg-zinc-50 dark:text-blue-400 dark:hover:bg-zinc-900/30"
+                  onClick={() => { setQuery(""); setSearchResults(null); }}
+                >
+                  {t(dictionary.sidebar.searchViewAll)} →
+                </Link>
               ) : null}
             </div>
           ) : null}
@@ -432,6 +543,44 @@ export function RightSidebar() {
               <div className="pb-2">
                 {leaders.map((leader) => (
                   <LeaderRow key={leader.id} profile={leader} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {/* ─── Recommended Attentions (Phase 4) ─── */}
+          {recommendedAttentions.length > 0 ? (
+            <section className="rounded-2xl border border-border/80 bg-zinc-50/80 dark:bg-zinc-900/40 overflow-hidden">
+              <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+                <RiFlashlightLine className="size-4 text-amber-500" />
+                <p className="text-lg font-black text-foreground">
+                  {t(dictionary.sidebar.recommendedAttentions)}
+                </p>
+              </div>
+              <div>
+                {recommendedAttentions.map((att) => (
+                  <Link
+                    key={att.id}
+                    href={`/a/${att.slug || att.id}`}
+                    className="group block px-4 py-2.5 transition-colors hover:bg-zinc-100/80 dark:hover:bg-zinc-800/40"
+                  >
+                    <p className="text-[13px] font-bold leading-5 text-foreground line-clamp-2">
+                      {att.title}
+                    </p>
+                    <div className="mt-1 flex items-center gap-2 text-[11px]">
+                      <span className="tabular-nums font-medium text-amber-600 dark:text-amber-400">
+                        {att.attention_score.toLocaleString()}
+                      </span>
+                      <span className="text-muted-foreground">
+                        · {att.post_count} {t(dictionary.sidebar.postsCount)}
+                      </span>
+                      {att.category && (
+                        <span className="ml-auto rounded bg-zinc-200/70 px-1.5 py-px text-[10px] font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                          {att.category}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
                 ))}
               </div>
             </section>

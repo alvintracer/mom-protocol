@@ -15,7 +15,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <TopBar />
           </Suspense>
           <main className="flex-1 bg-background pb-24 sm:pb-6">
-            <div className="mx-auto w-full">{children}</div>
+            <div className="mx-auto w-full max-w-[740px]">{children}</div>
           </main>
         </div>
         <RightSidebar />

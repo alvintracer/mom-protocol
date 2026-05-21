@@ -4,8 +4,8 @@ import Link from "next/link";
 import { 
   RiHome7Fill, 
   RiBarChartGroupedFill, 
+  RiSearchLine,
   RiSafe2Line,
-  RiShieldCheckLine,
   RiUser3Line
 } from "react-icons/ri";
 
@@ -16,7 +16,7 @@ export function MobileNav() {
   const navItems = [
     { href: "/", label: t(dictionary.nav.home), icon: RiHome7Fill },
     { href: "/explore", label: t(dictionary.nav.explore), icon: RiBarChartGroupedFill },
-    { href: "/oracle", label: t(dictionary.nav.oracle), icon: RiShieldCheckLine },
+    { href: "/search", label: t(dictionary.search.title), icon: RiSearchLine },
     { href: "/rewards", label: t(dictionary.nav.rewards), icon: RiSafe2Line },
     { href: "/profile", label: t(dictionary.nav.profile), icon: RiUser3Line },
   ];

@@ -57,7 +57,7 @@ export function TopBar() {
 
   return (
     <header className="sticky top-0 z-20 bg-background/80 backdrop-blur border-b border-border">
-      <div className="flex flex-col">
+      <div className="mx-auto max-w-[740px] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3">
           {platformStats !== null ? (
             <Link href="/rewards" className="flex min-w-0 items-center gap-1.5 rounded-lg border border-blue-200/50 bg-blue-50 px-3 py-1.5 transition-colors hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:hover:bg-blue-500/20">

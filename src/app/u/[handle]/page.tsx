@@ -386,17 +386,15 @@ function MessageButton({
     const supabase = createClient();
 
     // Check for existing conversation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: myConvs } = await (supabase as any)
+    const { data: myConvs } = await supabase
       .from("conversation_members")
       .select("conversation_id")
       .eq("user_id", currentUserId);
 
-    const myConvIds = (myConvs ?? []).map((r: { conversation_id: string }) => r.conversation_id);
+    const myConvIds = (myConvs ?? []).map((r) => r.conversation_id);
 
     if (myConvIds.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: sharedConv } = await (supabase as any)
+      const { data: sharedConv } = await supabase
         .from("conversation_members")
         .select("conversation_id")
         .eq("user_id", targetUserId)
@@ -410,25 +408,21 @@ function MessageButton({
       }
     }
 
-    // Create new conversation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: conv } = await (supabase as any)
+    // Generate ID client-side to avoid RLS SELECT chicken-and-egg issue
+    const convId = crypto.randomUUID();
+
+    await supabase
       .from("conversations")
-      .insert({})
-      .select("id")
-      .single();
+      .insert({ id: convId });
 
-    if (conv) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from("conversation_members")
-        .insert([
-          { conversation_id: conv.id, user_id: currentUserId },
-          { conversation_id: conv.id, user_id: targetUserId },
-        ]);
+    await supabase
+      .from("conversation_members")
+      .insert([
+        { conversation_id: convId, user_id: currentUserId },
+        { conversation_id: convId, user_id: targetUserId },
+      ]);
 
-      router.push(`/messages?conv=${conv.id}`);
-    }
+    router.push(`/messages?conv=${convId}`);
     setLoading(false);
   }, [currentUserId, targetUserId, router]);
 

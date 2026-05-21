@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import {
   RiArrowLeftSLine,
   RiChat1Line,
+  RiEmotionHappyLine,
   RiMailLine,
   RiSendPlane2Fill,
   RiSearchLine,
@@ -58,7 +59,9 @@ function MessagesContent() {
   const [showNewChat, setShowNewChat] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{ id: string; display_name: string | null }[]>([]);
+  const [showEmoji, setShowEmoji] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
   const convParam = searchParams.get("conv");
 
@@ -84,8 +87,7 @@ function MessagesContent() {
       setCurrentUserId(userData.user.id);
 
       // Get conversations where user is a member
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: memberRows } = await (supabase as any)
+      const { data: memberRows } = await supabase
         .from("conversation_members")
         .select("conversation_id")
         .eq("user_id", userData.user.id);
@@ -103,16 +105,15 @@ function MessagesContent() {
       const previews: ConversationPreview[] = [];
 
       for (const convId of convIds) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: otherMembers } = await (supabase as any)
+        // Join with profiles via FK — use explicit type for the join result
+        const { data: otherMembers } = await supabase
           .from("conversation_members")
-          .select("user_id, profiles(display_name, avatar_url)")
+          .select("user_id")
           .eq("conversation_id", convId)
           .neq("user_id", userData.user.id)
           .limit(1);
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: lastMsg } = await (supabase as any)
+        const { data: lastMsg } = await supabase
           .from("direct_messages")
           .select("body, created_at")
           .eq("conversation_id", convId)
@@ -122,11 +123,18 @@ function MessagesContent() {
 
         const other = otherMembers?.[0];
         if (other) {
+          // Fetch profile separately for the other user
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("display_name, avatar_url")
+            .eq("id", other.user_id)
+            .maybeSingle();
+
           previews.push({
             conversation_id: convId,
             other_user_id: other.user_id,
-            other_display_name: other.profiles?.display_name ?? null,
-            other_avatar_url: other.profiles?.avatar_url ?? null,
+            other_display_name: profile?.display_name ?? null,
+            other_avatar_url: profile?.avatar_url ?? null,
             last_message_body: lastMsg?.[0]?.body ?? null,
             last_message_at: lastMsg?.[0]?.created_at ?? null,
             unread_count: 0,
@@ -156,11 +164,12 @@ function MessagesContent() {
     const supabase = createClient();
 
     async function loadMessages() {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
+      const convId = activeConv;
+      if (!convId) return;
+      const { data } = await supabase
         .from("direct_messages")
         .select("*")
-        .eq("conversation_id", activeConv)
+        .eq("conversation_id", convId)
         .eq("is_deleted", false)
         .order("created_at", { ascending: true })
         .limit(100);
@@ -199,8 +208,7 @@ function MessagesContent() {
     setNewMessage("");
 
     const supabase = createClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    await supabase
       .from("direct_messages")
       .insert({
         conversation_id: activeConv,
@@ -209,23 +217,39 @@ function MessagesContent() {
       });
   }, [activeConv, currentUserId, newMessage]);
 
-  // Search users for new conversation
+  // Search users for new conversation — only followed users
   useEffect(() => {
-    if (searchQuery.length < 2) {
+    if (searchQuery.length < 1) {
       setSearchResults([]);
       return;
     }
 
     const timeout = setTimeout(async () => {
+      if (!currentUserId) return;
       const supabase = createClient();
+
+      // Get IDs of users the current user follows
+      const { data: followRows } = await supabase
+        .from("user_follows")
+        .select("following_id")
+        .eq("follower_id", currentUserId);
+
+      const followedIds = (followRows ?? []).map((r) => r.following_id);
+      if (followedIds.length === 0) {
+        setSearchResults([]);
+        return;
+      }
+
+      // Filter followed users by search query
       const { data } = await supabase
         .from("profiles")
         .select("id, display_name")
+        .in("id", followedIds)
         .ilike("display_name", `%${searchQuery}%`)
         .limit(10);
 
       setSearchResults(
-        (data ?? []).filter((u) => u.id !== currentUserId) as { id: string; display_name: string | null }[],
+        (data ?? []) as { id: string; display_name: string | null }[],
       );
     }, 300);
 
@@ -246,26 +270,23 @@ function MessagesContent() {
       return;
     }
 
-    // Create new conversation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: conv } = await (supabase as any)
+    // Generate ID client-side to avoid RLS SELECT chicken-and-egg issue
+    const convId = crypto.randomUUID();
+
+    // Create conversation + members in sequence
+    await supabase
       .from("conversations")
-      .insert({})
-      .select("id")
-      .single();
+      .insert({ id: convId });
 
-    if (!conv) return;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    await supabase
       .from("conversation_members")
       .insert([
-        { conversation_id: conv.id, user_id: currentUserId },
-        { conversation_id: conv.id, user_id: otherUserId },
+        { conversation_id: convId, user_id: currentUserId },
+        { conversation_id: convId, user_id: otherUserId },
       ]);
 
     const newPreview: ConversationPreview = {
-      conversation_id: conv.id,
+      conversation_id: convId,
       other_user_id: otherUserId,
       other_display_name: otherName,
       other_avatar_url: null,
@@ -275,7 +296,7 @@ function MessagesContent() {
     };
 
     setConversations((prev) => [newPreview, ...prev]);
-    setActiveConv(conv.id);
+    setActiveConv(convId);
     setShowNewChat(false);
     setSearchQuery("");
   }, [conversations, currentUserId]);
@@ -285,7 +306,7 @@ function MessagesContent() {
   return (
     <div className="flex flex-1 min-w-0 min-h-[calc(100vh-56px)]">
       {/* Conversation List */}
-      <div className={`w-full border-r border-border sm:w-80 lg:w-96 shrink-0 flex flex-col ${
+      <div className={`w-full border-r border-border sm:w-[30%] sm:max-w-[320px] sm:min-w-[240px] shrink-0 flex flex-col ${
         activeConv ? "hidden sm:flex" : "flex"
       }`}>
         {/* List Header */}
@@ -460,7 +481,33 @@ function MessagesContent() {
 
             {/* Input */}
             <div className="border-t border-border p-3">
+              {/* Emoji Picker */}
+              {showEmoji && (
+                <div
+                  ref={emojiRef}
+                  className="mb-2 grid grid-cols-8 gap-1 rounded-xl border border-border bg-background p-2 shadow-lg sm:grid-cols-10"
+                >
+                  {EMOJI_LIST.map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => {
+                        setNewMessage((prev) => prev + emoji);
+                        setShowEmoji(false);
+                      }}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-xl transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowEmoji(!showEmoji)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-zinc-100 hover:text-foreground dark:hover:bg-zinc-800"
+                >
+                  <RiEmotionHappyLine className="size-5" />
+                </button>
                 <input
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
@@ -499,6 +546,14 @@ function MessagesContent() {
     </div>
   );
 }
+
+const EMOJI_LIST = [
+  "😀", "😂", "🥹", "😍", "🤔", "😮", "😢", "🔥",
+  "❤️", "👍", "👎", "🎉", "💯", "🙏", "👏", "💪",
+  "✨", "⚡", "🚀", "🌟", "💡", "🤝", "😎", "🤣",
+  "😱", "🥳", "👀", "💀", "🫡", "🤗", "😈", "🤩",
+  "💰", "📈", "📉", "🏆", "⚽", "🎮", "🎵", "📸",
+];
 
 function formatShortDate(dateStr: string): string {
   const date = new Date(dateStr);

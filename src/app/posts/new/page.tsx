@@ -14,10 +14,12 @@ import {
   RiListCheck2,
   RiSearchLine,
   RiSendPlane2Line,
+  RiVipDiamondLine,
 } from "react-icons/ri";
 
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
+import { PremiumEditor } from "@/shared/components/editor/PremiumEditor";
 import type { Database, Json, SupportedLanguage } from "@/shared/types/database";
 
 type AttentionRow = Database["public"]["Tables"]["attention_clusters"]["Row"];
@@ -80,11 +82,61 @@ function NewPostContent() {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [linkTitle, setLinkTitle] = useState(initialDraft.linkTitle);
   const [linkUrl, setLinkUrl] = useState(initialDraft.linkUrl);
+  const [linkPreview, setLinkPreview] = useState<{ image: string; title: string; description: string } | null>(null);
+  const [isFetchingLink, setIsFetchingLink] = useState(false);
   const [status, setStatus] = useState<"idle" | "saving" | "posting" | "error" | "login">("idle");
+  // Premium post
+  const [isPremium, setIsPremium] = useState(false);
+  const [premiumCost, setPremiumCost] = useState<string>("");
+  const [momRate, setMomRate] = useState<number>(0.001);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  // Topic picker
+  const [selectedTopics, setSelectedTopics] = useState<{ slug: string; label: string }[]>([]);
+  const [topicQuery, setTopicQuery] = useState("");
+  const [topicResults, setTopicResults] = useState<{ slug: string; canonical_label: string; labels: Record<string, string>; kind: string }[]>([]);
 
   const searchParams = useSearchParams();
   const attentionParam = searchParams.get("attention");
   const outcomeParam = searchParams.get("outcome");
+  const quoteParam = searchParams.get("quote");
+  const [quotePost, setQuotePost] = useState<{
+    id: string;
+    authorName: string;
+    authorHandle: string;
+    body: string;
+    title: string | null;
+    attentionId: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchOg = async () => {
+      const url = linkUrl.trim();
+      if (!isValidUrl(url)) {
+        if (mounted) { setLinkPreview(null); setIsFetchingLink(false); }
+        return;
+      }
+      setIsFetchingLink(true);
+      try {
+        const res = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
+        const data = await res.json();
+        if (mounted && data && !data.error) {
+          setLinkPreview({ image: data.image || "", title: data.title || "", description: data.description || "" });
+          if (!linkTitle && data.title) {
+            setLinkTitle(data.title);
+          }
+        } else if (mounted) {
+          setLinkPreview(null);
+        }
+      } catch {
+        if (mounted) setLinkPreview(null);
+      } finally {
+        if (mounted) setIsFetchingLink(false);
+      }
+    };
+    const timer = setTimeout(fetchOg, 500);
+    return () => { mounted = false; clearTimeout(timer); };
+  }, [linkUrl]);
 
   useEffect(() => {
     let mounted = true;
@@ -144,6 +196,97 @@ function NewPostContent() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attentionParam, outcomeParam]);
+
+  // Load quoted post
+  useEffect(() => {
+    if (!quoteParam) return;
+    let mounted = true;
+    const supabase = createClient();
+
+    async function loadQuotePost() {
+      const { data: postData } = await supabase
+        .from("posts")
+        .select("*")
+        .eq("id", quoteParam!)
+        .eq("is_deleted", false)
+        .maybeSingle();
+      if (!mounted || !postData) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", postData.user_id)
+        .maybeSingle();
+
+      if (!mounted) return;
+
+      setQuotePost({
+        id: postData.id,
+        authorName: profile?.display_name ?? profile?.handle ?? `u/${postData.user_id.slice(0, 8)}`,
+        authorHandle: profile?.handle ?? postData.user_id.slice(0, 8),
+        body: postData.original_body,
+        title: postData.original_title,
+        attentionId: postData.attention_cluster_id,
+      });
+
+      // Auto-select the quoted post's attention if any
+      if (postData.attention_cluster_id && !selectedAttention) {
+        const { data: attn } = await supabase
+          .from("attention_clusters")
+          .select("*")
+          .eq("id", postData.attention_cluster_id)
+          .maybeSingle();
+        if (mounted && attn) {
+          const mapped = mapAttention(attn);
+          setSelectedAttention(mapped);
+          setAttentionOptions((prev) =>
+            prev.some((a) => a.id === mapped.id) ? prev : [mapped, ...prev],
+          );
+        }
+      }
+    }
+
+    loadQuotePost();
+    return () => { mounted = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteParam]);
+
+  // Fetch MOM rate for premium price display + current user ID
+  useEffect(() => {
+    fetch("/api/rate")
+      .then((r) => r.json())
+      .then((d) => { if (d.rate) setMomRate(d.rate); })
+      .catch(() => {});
+    createClient().auth.getUser().then(({ data }) => {
+      if (data.user) setCurrentUserId(data.user.id);
+    });
+  }, []);
+
+  // Topic search
+  useEffect(() => {
+    if (topicQuery.trim().length < 1) {
+      setTopicResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const supabase = createClient();
+      const q = topicQuery.trim().toLowerCase();
+      const { data } = await supabase
+        .from("topics")
+        .select("slug, canonical_label, labels, kind")
+        .or(`slug.ilike.%${q}%,canonical_label.ilike.%${q}%`)
+        .order("canonical_label")
+        .limit(10);
+      if (!cancelled && data) {
+        setTopicResults(
+          (data as { slug: string; canonical_label: string; labels: Record<string, string>; kind: string }[])
+            .filter((t) => !selectedTopics.some((s) => s.slug === t.slug)),
+        );
+      }
+    }, 200);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [topicQuery, selectedTopics]);
 
   useEffect(() => {
     let mounted = true;
@@ -248,7 +391,7 @@ function NewPostContent() {
   const normalizedLinkUrl = linkUrl.trim();
   const canPost =
     title.trim().length > 0 &&
-    (!normalizedLinkUrl || (linkTitle.trim().length > 0 && isValidUrl(normalizedLinkUrl))) &&
+    (!normalizedLinkUrl || isValidUrl(normalizedLinkUrl)) &&
     mediaItems.length <= maxFiles &&
     totalMediaBytes <= maxTotalBytes;
 
@@ -366,16 +509,22 @@ function NewPostContent() {
           user_id: userData.user.id,
           attention_cluster_id: selectedAttention?.id ?? null,
           selected_outcome: selectedOutcome || null,
-          post_kind: "post",
+          post_kind: quotePost ? "quote" : "post",
           type: "analysis",
           visibility: "public",
           original_language: language as SupportedLanguage,
           original_title: title.trim(),
           original_body: body.trim() || title.trim(),
-          link_title: linkTitle.trim() || null,
+          link_title: linkTitle.trim() || linkPreview?.title || null,
           link_url: normalizedLinkUrl || null,
+          link_image_url: linkPreview?.image || null,
+          link_description: linkPreview?.description || null,
           media_items: uploadedMediaItems as Json,
           translation_status: "pending",
+          repost_of_post_id: quotePost?.id ?? null,
+          is_premium: isPremium,
+          premium_energy_cost: isPremium && premiumCost ? Number(premiumCost) : null,
+          content_format: isPremium ? "html" : "plain",
         })
         .select("id")
         .single();
@@ -388,6 +537,33 @@ function NewPostContent() {
       await supabase.rpc("enqueue_missing_translations_for_post", {
         target_post_id: data.id,
       });
+
+      // Insert user-selected topics
+      if (selectedTopics.length > 0) {
+        const { data: topicRows } = await supabase
+          .from("topics")
+          .select("id, slug")
+          .in("slug", selectedTopics.map((t) => t.slug));
+
+        if (topicRows && topicRows.length > 0) {
+          await supabase.from("content_topics").insert(
+            topicRows.map((t: { id: string }) => ({
+              topic_id: t.id,
+              target_type: "post" as const,
+              target_id: data.id,
+              source: "user" as const,
+              confidence: 1.0,
+            })),
+          );
+        }
+      }
+
+      // Fire-and-forget: LLM auto-tagging
+      fetch("/api/posts/auto-tag", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId: data.id }),
+      }).catch(() => {});
 
       window.localStorage.removeItem("momment.postDraft");
       router.push(`/posts/${data.id}`);
@@ -406,8 +582,69 @@ function NewPostContent() {
         </Link>
       </header>
 
-      <main className="mx-auto grid max-w-5xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="space-y-4">
+      <main className="mx-auto max-w-2xl space-y-4 px-4 py-5 sm:px-6">
+          {/* Premium post toggle — top of form */}
+          <section className="rounded-2xl border border-border bg-background shadow-sm overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setIsPremium(!isPremium)}
+              className={`flex h-14 w-full items-center gap-3 px-4 text-left transition-colors ${
+                isPremium
+                  ? "bg-blue-500/5 border-b border-blue-500/20"
+                  : "hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
+              }`}
+            >
+              <div className={`flex size-8 items-center justify-center rounded-lg transition-colors ${
+                isPremium ? "bg-blue-500/15 text-blue-600" : "bg-zinc-100 text-muted-foreground dark:bg-zinc-800"
+              }`}>
+                <RiVipDiamondLine className="size-4" />
+              </div>
+              <span className={`text-sm font-black ${isPremium ? "text-blue-600 dark:text-blue-400" : "text-foreground"}`}>
+                {t(dictionary.postCreate.premiumLabel)}
+              </span>
+              <div className={`ml-auto flex size-5 items-center justify-center rounded-full border-2 transition-all ${
+                isPremium
+                  ? "border-blue-500 bg-blue-500"
+                  : "border-border"
+              }`}>
+                {isPremium && (
+                  <svg viewBox="0 0 12 12" className="size-3 text-white">
+                    <path d="M3.5 6.5L5 8l3.5-4" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+            </button>
+
+            {isPremium && (
+              <div className="space-y-3 p-4">
+                <div>
+                  <label className="text-xs font-bold text-muted-foreground">
+                    {t(dictionary.postCreate.premiumUnlockPrice)}
+                  </label>
+                  <div className="mt-1.5 flex items-center gap-3">
+                    <input
+                      type="number"
+                      min="1"
+                      max="10000"
+                      value={premiumCost}
+                      onChange={(e) => setPremiumCost(e.target.value)}
+                      placeholder={t(dictionary.postCreate.premiumPlaceholder)}
+                      className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm font-bold text-foreground outline-none focus:border-blue-500 [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    {premiumCost && Number(premiumCost) > 0 && (
+                      <span className="shrink-0 text-sm font-bold text-muted-foreground">
+                        ≈ ${(Number(premiumCost) * momRate).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[11px] font-medium leading-4 text-muted-foreground">
+                  {t(dictionary.postCreate.premiumFeeNotice)}
+                </p>
+              </div>
+            )}
+          </section>
+
           <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
             <button
               type="button"
@@ -520,16 +757,106 @@ function NewPostContent() {
               className="mt-2 h-12 w-full rounded-xl border border-border bg-background px-4 text-[17px] font-black text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-500"
             />
 
-            <label className="mt-4 block text-sm font-black text-foreground">
-              {t(dictionary.postCreate.bodyLabel)}
-            </label>
-            <textarea
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
-              placeholder={t(dictionary.postCreate.bodyPlaceholder)}
-              rows={7}
-              className="mt-2 min-h-44 w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-[16px] font-medium leading-7 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-500"
-            />
+            {!isPremium && (
+              <>
+                <label className="mt-4 block text-sm font-black text-foreground">
+                  {t(dictionary.postCreate.bodyLabel)}
+                </label>
+                <textarea
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
+                  placeholder={t(dictionary.postCreate.bodyPlaceholder)}
+                  rows={5}
+                  maxLength={500}
+                  className="mt-2 min-h-32 w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-[16px] font-medium leading-7 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-500"
+                />
+                <p className={`mt-1 text-right text-[11px] font-bold ${body.length > 450 ? "text-red-500" : "text-muted-foreground/50"}`}>
+                  {body.length} / 500
+                </p>
+              </>
+            )}
+          </section>
+
+          {isPremium && (
+            <>
+              <PremiumEditor
+                value={body}
+                onChange={setBody}
+                placeholder={t(dictionary.postCreate.bodyPlaceholder)}
+                userId={currentUserId}
+              />
+              <p className={`-mt-2 text-right text-[11px] font-bold ${stripHtmlLen(body) > 28000 ? "text-red-500" : "text-muted-foreground/50"}`}>
+                {stripHtmlLen(body).toLocaleString()} / 30,000
+              </p>
+            </>
+          )}
+
+          {/* Topic picker */}
+          <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
+            <h2 className="text-sm font-black text-foreground">
+              {t({ ko: "토픽", en: "Topics", es: "Temas" })}
+              <span className="ml-1.5 text-xs font-bold text-muted-foreground">
+                {t({ ko: "선택사항 · 최대 5개", en: "Optional · Max 5", es: "Opcional · Máx 5" })}
+              </span>
+            </h2>
+
+            {selectedTopics.length > 0 && (
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {selectedTopics.map((topic) => (
+                  <span
+                    key={topic.slug}
+                    className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-[12px] font-bold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
+                  >
+                    #{topic.label}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTopics((prev) => prev.filter((t) => t.slug !== topic.slug))}
+                      className="ml-0.5 rounded-full p-0.5 hover:bg-blue-200/50 dark:hover:bg-blue-500/20"
+                    >
+                      <RiCloseLine className="size-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {selectedTopics.length < 5 && (
+              <div className="relative mt-2">
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3">
+                  <RiSearchLine className="size-4 text-muted-foreground" />
+                  <input
+                    value={topicQuery}
+                    onChange={(e) => setTopicQuery(e.target.value)}
+                    placeholder={t({ ko: "토픽 검색...", en: "Search topics...", es: "Buscar temas..." })}
+                    className="h-9 min-w-0 flex-1 bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground"
+                  />
+                </div>
+
+                {topicResults.length > 0 && (
+                  <div className="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-y-auto rounded-xl border border-border bg-background shadow-lg">
+                    {topicResults.map((topic) => (
+                      <button
+                        key={topic.slug}
+                        type="button"
+                        onClick={() => {
+                          setSelectedTopics((prev) => [
+                            ...prev,
+                            { slug: topic.slug, label: topic.labels[language] || topic.canonical_label },
+                          ]);
+                          setTopicQuery("");
+                          setTopicResults([]);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-foreground hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
+                      >
+                        <span className="text-blue-600">#</span>
+                        <span>{topic.labels[language] || topic.canonical_label}</span>
+                        <span className="ml-auto text-[10px] font-medium text-muted-foreground">{topic.kind}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
@@ -609,20 +936,24 @@ function NewPostContent() {
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <input
-                value={linkTitle}
-                onChange={(event) => setLinkTitle(event.target.value)}
-                placeholder={t(dictionary.postCreate.linkTitlePlaceholder)}
-                className="h-11 rounded-xl border border-border bg-background px-4 text-sm font-bold text-foreground outline-none focus:border-blue-500"
-              />
-              <input
                 value={linkUrl}
                 onChange={(event) => setLinkUrl(event.target.value)}
                 placeholder="https://"
                 className="h-11 rounded-xl border border-border bg-background px-4 text-sm font-bold text-foreground outline-none focus:border-blue-500"
               />
+              <input
+                value={linkTitle}
+                onChange={(event) => setLinkTitle(event.target.value)}
+                placeholder={t(dictionary.postCreate.linkTitlePlaceholder) + " (Optional)"}
+                className="h-11 rounded-xl border border-border bg-background px-4 text-sm font-bold text-foreground outline-none focus:border-blue-500"
+              />
             </div>
             {normalizedLinkUrl ? (
               <div className="mt-3 rounded-xl border border-border p-3">
+                {linkPreview?.image && (
+                  <img src={linkPreview.image} alt="" className="mb-3 w-full max-h-48 object-cover rounded-lg" />
+                )}
+                {isFetchingLink && <p className="mb-2 text-xs text-muted-foreground animate-pulse">Fetching preview...</p>}
                 <p className="text-xs font-black text-blue-600">
                   {detectSourceName(
                     normalizedLinkUrl,
@@ -630,14 +961,34 @@ function NewPostContent() {
                   )}
                 </p>
                 <p className="mt-1 truncate text-sm font-black text-foreground">
-                  {linkTitle || t(dictionary.postCreate.linkTitleRequired)}
+                  {linkTitle || linkPreview?.title || t(dictionary.postCreate.linkTitleRequired)}
                 </p>
-                <p className="mt-1 truncate text-xs font-bold text-muted-foreground">
-                  {normalizedLinkUrl}
+                <p className="mt-1 line-clamp-2 text-xs font-bold text-muted-foreground">
+                  {linkPreview?.description || normalizedLinkUrl}
                 </p>
               </div>
             ) : null}
           </section>
+
+          {quotePost ? (
+            <section className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 shadow-sm dark:border-blue-500/20 dark:bg-blue-500/5">
+              <p className="text-[11px] font-black uppercase tracking-wider text-blue-600">
+                {t(dictionary.postCreate.quotingLabel)}
+              </p>
+              <div className="mt-2 rounded-xl border border-border bg-background p-3">
+                <div className="flex items-center gap-1.5 text-[13px]">
+                  <span className="font-bold text-foreground">{quotePost.authorName}</span>
+                  <span className="text-muted-foreground">@{quotePost.authorHandle}</span>
+                </div>
+                {quotePost.title ? (
+                  <p className="mt-1.5 text-sm font-black text-foreground">{quotePost.title}</p>
+                ) : null}
+                <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm font-medium leading-6 text-foreground">
+                  {quotePost.body}
+                </p>
+              </div>
+            </section>
+          ) : null}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <button
@@ -656,10 +1007,16 @@ function NewPostContent() {
               disabled={!canPost || status === "posting"}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-blue-600 px-6 text-sm font-black text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <RiSendPlane2Line className="size-4" />
+              {status === "posting" ? (
+                <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              ) : (
+                <RiSendPlane2Line className="size-4" />
+              )}
               {status === "posting"
                 ? t(dictionary.postCreate.posting)
-                : t(dictionary.postCreate.publish)}
+                : quotePost
+                  ? t(dictionary.postCreate.publishQuote)
+                  : t(dictionary.postCreate.publish)}
             </button>
           </div>
           {status === "error" ? (
@@ -667,33 +1024,6 @@ function NewPostContent() {
               {t(dictionary.postCreate.saveFailed)}
             </p>
           ) : null}
-        </section>
-
-        <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-          <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
-            {selectedAttention ? (
-              <p className="text-xs font-black text-blue-600">
-                {formatAttentionLabel(selectedAttention)}
-              </p>
-            ) : null}
-            {selectedOutcome ? (
-              <p className="mt-2 inline-flex rounded-full bg-blue-500/10 px-3 py-1 text-xs font-black text-blue-600">
-                {formatOutcomeLabel(selectedOutcome)}
-              </p>
-            ) : null}
-            <h2 className="mt-2 text-lg font-black leading-7 text-foreground">
-              {title || t(dictionary.postCreate.previewTitle)}
-            </h2>
-            {body ? (
-              <p className="mt-2 line-clamp-6 whitespace-pre-wrap text-sm font-medium leading-6 text-muted-foreground">
-                {body}
-              </p>
-            ) : null}
-            <div className="mt-4 text-xs font-bold text-muted-foreground">
-              {t(dictionary.postCreate.mediaCount)} {mediaItems.length}/{maxFiles} · {formatBytes(totalMediaBytes)} / {mediaMode === "video" ? "100MB" : "50MB"}
-            </div>
-          </section>
-        </aside>
       </main>
     </div>
   );
@@ -857,4 +1187,8 @@ function getVideoDuration(file: File): Promise<number> {
     };
     video.src = URL.createObjectURL(file);
   });
+}
+
+function stripHtmlLen(html: string): number {
+  return html.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").length;
 }

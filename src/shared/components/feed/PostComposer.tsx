@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   RiAddLine,
   RiArrowDownSLine,
@@ -34,13 +34,16 @@ export function PostComposer({
   isAuthenticated,
   onCreatePost,
   lockedAttentionId = null,
-  caseOptions = [],
+  caseOptions: initialCaseOptions = [],
   compactContext = false,
 }: PostComposerProps) {
   const { dictionary, language, t } = useI18n();
   const [body, setBody] = useState("");
   const [attentionId, setAttentionId] = useState(lockedAttentionId ?? "");
   const [selectedOutcome, setSelectedOutcome] = useState("");
+  const [caseOptions, setCaseOptions] = useState<string[]>(initialCaseOptions);
+  const [linkPreview, setLinkPreview] = useState<{ image: string; title: string; description: string } | null>(null);
+  const [isFetchingLink, setIsFetchingLink] = useState(false);
   const [externalUrl, setExternalUrl] = useState("");
   const [tags, setTags] = useState("");
   const [notice, setNotice] = useState("");
@@ -51,6 +54,33 @@ export function PostComposer({
     const fromBody = body.match(/https?:\/\/\S+/i)?.[0] ?? "";
     return externalUrl.trim() || fromBody;
   }, [body, externalUrl]);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchOg = async () => {
+      const url = detectedUrl.trim();
+      if (!url || !url.startsWith("http")) {
+        if (mounted) { setLinkPreview(null); setIsFetchingLink(false); }
+        return;
+      }
+      setIsFetchingLink(true);
+      try {
+        const res = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
+        const data = await res.json();
+        if (mounted && data && !data.error) {
+          setLinkPreview({ image: data.image || "", title: data.title || "", description: data.description || "" });
+        } else if (mounted) {
+          setLinkPreview(null);
+        }
+      } catch {
+        if (mounted) setLinkPreview(null);
+      } finally {
+        if (mounted) setIsFetchingLink(false);
+      }
+    };
+    const timer = setTimeout(fetchOg, 500);
+    return () => { mounted = false; clearTimeout(timer); };
+  }, [detectedUrl]);
 
   const linkedAttention =
     attentions.find((attention) => attention.id === (lockedAttentionId ?? attentionId)) ??
@@ -78,6 +108,7 @@ export function PostComposer({
 
     const post: SocialPost = {
       id: `mock-post-${postCounterRef.current}`,
+      authorId: "",
       title: null,
       body: body.trim() || t(dictionary.home.mockLinkSource),
       originalLanguage: language,
@@ -102,10 +133,15 @@ export function PostComposer({
       externalPreview: detectedUrl
         ? {
             sourceName: detectSourceName(detectedUrl),
-            title: linkedAttention
+            title: linkPreview?.title 
+              ? { ko: linkPreview.title, en: linkPreview.title, es: linkPreview.title }
+              : linkedAttention
               ? text(linkedAttention.title, linkedAttention.title, linkedAttention.title)
               : dictionary.home.mockLinkSource,
-            description: dictionary.home.mockLinkSourceDesc,
+            description: linkPreview?.description
+              ? { ko: linkPreview.description, en: linkPreview.description, es: linkPreview.description }
+              : dictionary.home.mockLinkSourceDesc,
+            imageUrl: linkPreview?.image || null,
           }
         : null,
       translationStatus: "queued",
@@ -235,14 +271,18 @@ export function PostComposer({
 
           {!compactContext && detectedUrl ? (
             <div className="mt-3 rounded-lg border border-border p-3">
+              {linkPreview?.image && (
+                <img src={linkPreview.image} alt="" className="mb-3 w-full max-h-48 object-cover rounded-lg" />
+              )}
+              {isFetchingLink && <p className="mb-2 text-xs text-muted-foreground animate-pulse">Fetching preview...</p>}
               <p className="text-[12px] font-bold text-blue-600">
                 {t(dictionary.home.linkPreview)} · {detectSourceName(detectedUrl)}
               </p>
               <p className="mt-1 truncate text-sm font-black text-foreground">
-                {linkedAttention ? linkedAttention.title : t(dictionary.home.mockLinkSource)}
+                {linkPreview?.title || (linkedAttention ? linkedAttention.title : t(dictionary.home.mockLinkSource))}
               </p>
               <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-muted-foreground">
-                {t(dictionary.home.mockLinkSourceDesc)}
+                {linkPreview?.description || t(dictionary.home.mockLinkSourceDesc)}
               </p>
             </div>
           ) : null}

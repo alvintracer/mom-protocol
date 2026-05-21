@@ -105,6 +105,7 @@ export type PostProcessingStatus = "stored" | "queued" | "ready";
 
 export type SocialPost = {
   id: string;
+  authorId: string;
   title: string | null;
   body: string;
   originalLanguage: "ko" | "en" | "es";
@@ -121,6 +122,12 @@ export type SocialPost = {
         authorName: LocalizedText;
         authorHandle: string;
         body: string;
+        mediaItems?: {
+          name: string;
+          type: string;
+          size: number;
+          previewUrl?: string;
+        }[];
       }
     | null;
   replyCount: number;
@@ -141,8 +148,12 @@ export type SocialPost = {
         sourceName: string;
         title: LocalizedText;
         description: LocalizedText;
+        imageUrl?: string | null;
       }
     | null;
   translationStatus: PostProcessingStatus;
   autoTagStatus: PostProcessingStatus;
+  isPremium?: boolean;
+  premiumEnergyCost?: number | null;
+  contentFormat?: string;
 };

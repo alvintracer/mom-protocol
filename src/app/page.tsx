@@ -12,6 +12,7 @@ import { AdSlot } from "@/shared/components/ads/AdSlot";
 import type { Database } from "@/shared/types/database";
 import type { SocialPost } from "@/shared/types/domain";
 import { useContentTranslations } from "@/shared/hooks/useContentTranslations";
+import { RiHashtag } from "react-icons/ri";
 
 type AuthUser = {
   id: string;
@@ -45,6 +46,8 @@ function HomeFeed() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
+  const [userTopics, setUserTopics] = useState<{ slug: string; label: string; score: number }[]>([]);
+  const [activeTopicFilter, setActiveTopicFilter] = useState<string | null>(null);
 
   const postIds = useMemo(() => posts.map((p) => p.id), [posts]);
   const { getPostBody, getPostTitle } = useContentTranslations(postIds);
@@ -125,6 +128,31 @@ function HomeFeed() {
         } else {
           feedData = [];
         }
+      } else if (user) {
+        // "For You" — try personalized recommendations
+        const { data: recommended } = await supabase.rpc(
+          "get_recommended_post_ids",
+          { p_user_id: user.id, p_limit: 20 },
+        );
+        const recIds = (recommended ?? []).map(
+          (r: { post_id: string }) => r.post_id,
+        );
+
+        if (recIds.length >= 5) {
+          // Fetch posts in recommended order
+          const { data: recPosts } = await supabase
+            .from("posts")
+            .select("*")
+            .in("id", recIds);
+          const recMap = new Map((recPosts ?? []).map((p) => [p.id, p]));
+          feedData = recIds
+            .map((id: string) => recMap.get(id))
+            .filter((p): p is PostRow => p != null);
+        } else {
+          // Not enough recommendations → chronological fallback
+          const { data: allPosts } = await postQuery;
+          feedData = allPosts ?? [];
+        }
       } else {
         const { data: allPosts } = await postQuery;
         feedData = allPosts ?? [];
@@ -147,7 +175,8 @@ function HomeFeed() {
       const attentionIds = Array.from(
         new Set(rows.map((post) => post.attention_cluster_id).filter(Boolean)),
       ) as string[];
-      const [{ data: profileRows }, { data: postAttentionRows }] =
+      const allPostIds = rows.map((p) => p.id);
+      const [{ data: profileRows }, { data: postAttentionRows }, { data: topicLinks }] =
         await Promise.all([
           authorIds.length > 0
             ? supabase.from("profiles").select("*").in("id", authorIds)
@@ -158,10 +187,32 @@ function HomeFeed() {
                 .select("*")
                 .in("id", attentionIds)
             : Promise.resolve({ data: [] as AttentionRow[] }),
+          allPostIds.length > 0
+            ? supabase
+                .from("content_topics")
+                .select("target_id, source, topics!inner(slug, canonical_label, labels, kind)")
+                .eq("target_type", "post")
+                .in("target_id", allPostIds)
+            : Promise.resolve({ data: [] as { target_id: string; source: string; topics: { slug: string; canonical_label: string; labels: Record<string, string>; kind: string } }[] }),
         ]);
 
       if (!mounted) {
         return;
+      }
+
+      // Build postId → { userTags, autoTags }
+      const topicsByPostId = new Map<string, { userTags: string[]; autoTags: string[] }>();
+      for (const link of (topicLinks ?? []) as { target_id: string; source: string; topics: { slug: string; canonical_label: string; labels: Record<string, string>; kind: string } }[]) {
+        if (!topicsByPostId.has(link.target_id)) {
+          topicsByPostId.set(link.target_id, { userTags: [], autoTags: [] });
+        }
+        const entry = topicsByPostId.get(link.target_id)!;
+        const label = link.topics.canonical_label;
+        if (link.source === "user") {
+          if (!entry.userTags.includes(label)) entry.userTags.push(label);
+        } else {
+          if (!entry.autoTags.includes(label)) entry.autoTags.push(label);
+        }
       }
 
       const profilesById = new Map((profileRows ?? []).map((profile) => [profile.id, profile]));
@@ -183,8 +234,9 @@ function HomeFeed() {
           : null,
       );
       setPosts(
-        rows.map((row) =>
-          mapPostRowToSocialPost(
+        rows.map((row) => {
+          const tags = topicsByPostId.get(row.id);
+          return mapPostRowToSocialPost(
             row,
             profilesById.get(row.user_id) ?? null,
             row.repost_of_post_id
@@ -199,10 +251,31 @@ function HomeFeed() {
               ? attentionsById.get(row.attention_cluster_id) ?? null
               : null,
             dictionary.home.linkedAttentionFallbackDesc,
-          ),
-        ),
+            tags ?? null,
+          );
+        }),
       );
       setIsLoadingPosts(false);
+
+      // Fetch user interest topics for chip bar
+      if (user) {
+        const { data: interests } = await supabase
+          .from("user_interests")
+          .select("score, topics!inner(slug, canonical_label)")
+          .eq("user_id", user.id)
+          .gt("score", 0.5)
+          .order("score", { ascending: false })
+          .limit(10);
+        if (mounted && interests) {
+          setUserTopics(
+            (interests as unknown as { score: number; topics: { slug: string; canonical_label: string } }[]).map((i) => ({
+              slug: i.topics.slug,
+              label: i.topics.canonical_label,
+              score: Number(i.score),
+            })),
+          );
+        }
+      }
     }
 
     loadInitialData();
@@ -231,9 +304,54 @@ function HomeFeed() {
     };
   }, [activeFeed, dictionary.home.linkedAttentionFallbackDesc]);
 
+  // Filter posts by active topic
+  const displayPosts = useMemo(() => {
+    if (!activeTopicFilter) return posts;
+    return posts.filter((p) => {
+      const tags = [...(p.userTags ?? []), ...(p.autoTags ?? [])];
+      return tags.some((t) => t.toLowerCase() === activeTopicFilter.toLowerCase());
+    });
+  }, [posts, activeTopicFilter]);
+
   return (
     <div className="pb-20">
       {isLoadingPosts ? <LoadingBar /> : null}
+
+      {/* ─── Interest Topic Chip Bar ─── */}
+      {userTopics.length > 0 && activeFeed === "for-you" && (
+        <div className="border-b border-border px-4 py-2.5 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setActiveTopicFilter(null)}
+              className={`inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-[12px] font-bold transition-all ${
+                !activeTopicFilter
+                  ? "bg-foreground text-background"
+                  : "bg-zinc-100 text-muted-foreground hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+              }`}
+            >
+              {t(dictionary.search.all)}
+            </button>
+            {userTopics.map((topic) => (
+              <button
+                key={topic.slug}
+                onClick={() =>
+                  setActiveTopicFilter(
+                    activeTopicFilter === topic.label ? null : topic.label,
+                  )
+                }
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-bold transition-all ${
+                  activeTopicFilter === topic.label
+                    ? "bg-blue-600 text-white"
+                    : "bg-zinc-100 text-foreground hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                }`}
+              >
+                <RiHashtag className="size-3" />
+                {topic.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="divide-y divide-border">
         {isLoadingPosts ? (
@@ -258,13 +376,15 @@ function HomeFeed() {
             actionLabel={t(dictionary.nav.explore)}
           />
         ) : null}
-        {posts.map((post, idx) => (
+        {displayPosts.map((post, idx) => (
           <div key={post.id}>
             <SocialPostCard
               post={post}
               linkedEvent={null}
               translatedBody={getPostBody(post.id, post.body)}
               translatedTitle={getPostTitle(post.id, post.title)}
+              currentUserId={authUser?.id ?? null}
+              onRemoved={() => setPosts((prev) => prev.filter((p) => p.id !== post.id))}
             />
             {/* Insert ad after every 5th post */}
             {idx === 4 && (
@@ -313,6 +433,7 @@ function mapPostRowToSocialPost(
   repostAuthor: ProfileRow | null,
   attention: AttentionRow | null,
   linkedAttentionFallbackDesc: ReturnType<typeof text>,
+  topicTags: { userTags: string[]; autoTags: string[] } | null,
 ): SocialPost {
   const body = row.original_body;
   const language = row.original_language as LanguageCode;
@@ -322,6 +443,7 @@ function mapPostRowToSocialPost(
 
   return {
     id: row.id,
+    authorId: row.user_id,
     title: row.original_title,
     body,
     originalLanguage: language,
@@ -352,21 +474,23 @@ function mapPostRowToSocialPost(
           ),
           authorHandle: repostAuthor?.handle ?? repostSource.user_id.slice(0, 8),
           body: repostSource.original_body,
+          mediaItems: normalizeMediaItems(repostSource.media_items),
         }
       : null,
     replyCount: row.comment_count,
     repostCount: row.share_count,
     likeCount: row.like_count,
     viewCount: row.view_count,
-    userTags: [],
-    autoTags: attention ? [attention.slug ?? attention.category ?? "attention"] : ["global"],
+    userTags: topicTags?.userTags ?? [],
+    autoTags: topicTags?.autoTags ?? (attention ? [attention.slug ?? attention.category ?? "attention"] : []),
     externalUrl: row.link_url,
     mediaItems: normalizeMediaItems(row.media_items),
     externalPreview: row.link_url
       ? {
           sourceName: detectSourceName(row.link_url),
           title: text(row.link_title ?? row.link_url, row.link_title ?? row.link_url, row.link_title ?? row.link_url),
-          description: text(row.link_url, row.link_url, row.link_url),
+          description: text(row.link_description ?? row.link_url, row.link_description ?? row.link_url, row.link_description ?? row.link_url),
+          imageUrl: row.link_image_url,
         }
       : attention
       ? {
@@ -381,6 +505,9 @@ function mapPostRowToSocialPost(
       : null,
     translationStatus: row.translation_status === "translated" ? "ready" : "queued",
     autoTagStatus: "queued",
+    isPremium: row.is_premium,
+    premiumEnergyCost: row.premium_energy_cost,
+    contentFormat: row.content_format,
   };
 }
 

@@ -30,6 +30,7 @@ import { exploreAttentions as fallbackExploreAttentions } from "@/shared/data/ex
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
 import { useContentTranslations } from "@/shared/hooks/useContentTranslations";
+import { BookmarkButton } from "@/shared/components/feed/BookmarkButton";
 import type { Database, SupportedLanguage } from "@/shared/types/database";
 
 type AttentionCluster = Database["public"]["Tables"]["attention_clusters"]["Row"];
@@ -264,35 +265,36 @@ export function AttentionPageClient({ slug }: { slug: string }) {
       <div className="h-28 bg-[linear-gradient(135deg,#2563eb_0%,#0f172a_55%,#334155_100%)] sm:h-40" />
 
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
-        <div className="-mt-10 flex flex-col gap-4 sm:-mt-12 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex items-end gap-4">
-            <div className="flex size-20 items-center justify-center rounded-2xl border border-border/80 bg-background text-3xl font-black text-blue-600 shadow-md sm:size-24">
-              a/
-            </div>
-            <div className="pb-1">
-              <p className="text-[12px] font-black tracking-wider text-blue-500">a/{displaySlug}</p>
-              <h1 className="mt-1 max-w-3xl text-2xl font-black leading-tight text-foreground sm:text-3xl">
-                {cluster.title}
-              </h1>
-            </div>
+        <div className="-mt-10 flex items-end justify-between gap-4 sm:-mt-12">
+          <div className="flex size-20 items-center justify-center rounded-2xl border border-border/80 bg-background text-3xl font-black text-blue-600 shadow-md sm:size-24">
+            a/
           </div>
+          <div className="flex items-center gap-2 pb-1">
+            <BookmarkButton targetType="attention" targetId={cluster.id} variant="icon" />
+            <button
+              onClick={handleToggleJoin}
+              disabled={isTogglingJoin}
+              className={`inline-flex h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-black transition-colors disabled:opacity-50 ${
+                hasJoined
+                  ? "border border-border bg-background text-foreground hover:border-blue-500 hover:text-blue-600"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              <RiAddLine className="size-4" />
+              {hasJoined ? t(dictionary.attentionDetail.joined) : t(dictionary.attentionDetail.join)}
+            </button>
+          </div>
+        </div>
 
-          <button
-            onClick={handleToggleJoin}
-            disabled={isTogglingJoin}
-            className={`inline-flex h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-black transition-colors disabled:opacity-50 ${
-              hasJoined
-                ? "border border-border bg-background text-foreground hover:border-blue-500 hover:text-blue-600"
-                : "bg-blue-600 text-white hover:bg-blue-700"
-            }`}
-          >
-            <RiAddLine className="size-4" />
-            {hasJoined ? t(dictionary.attentionDetail.joined) : t(dictionary.attentionDetail.join)}
-          </button>
+        <div className="mt-3">
+          <p className="text-[12px] font-black tracking-wider text-blue-500">a/{displaySlug}</p>
+          <h1 className="mt-1 max-w-3xl text-2xl font-black leading-tight text-foreground sm:text-3xl">
+            {cluster.title}
+          </h1>
         </div>
 
         {cluster.description ? (
-          <p className="mt-4 max-w-3xl text-[15px] font-medium leading-6 text-muted-foreground">
+          <p className="mt-3 max-w-3xl text-[15px] font-medium leading-6 text-muted-foreground">
             {cluster.description}
           </p>
         ) : null}
@@ -398,7 +400,7 @@ export function AttentionPageClient({ slug }: { slug: string }) {
                     className="block px-5 py-3.5 transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-900/30"
                   >
                     <p className="text-[11px] font-black tracking-wider text-blue-600 dark:text-blue-400">a/{displaySlug}</p>
-                    <p className="mt-1.5 text-sm font-medium leading-6 text-foreground">
+                    <p className="mt-1.5 text-sm font-medium leading-6 text-foreground line-clamp-4">
                       {getPostBody(post.id, post.original_body)}
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] font-medium text-muted-foreground">

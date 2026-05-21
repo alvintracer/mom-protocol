@@ -47,6 +47,86 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
         Relationships: [];
       };
+      bookmarks: {
+        Row: {
+          id: string;
+          user_id: string;
+          target_type: string;
+          target_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          target_type: string;
+          target_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["bookmarks"]["Insert"]>;
+        Relationships: [];
+      };
+      conversations: {
+        Row: {
+          id: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["conversations"]["Insert"]>;
+        Relationships: [];
+      };
+      conversation_members: {
+        Row: {
+          conversation_id: string;
+          user_id: string;
+          last_read_at: string | null;
+        };
+        Insert: {
+          conversation_id: string;
+          user_id: string;
+          last_read_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["conversation_members"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "conversation_members_conversation_id_fkey";
+            columns: ["conversation_id"];
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      direct_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          body: string;
+          is_deleted: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_id: string;
+          body: string;
+          is_deleted?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["direct_messages"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       events: {
         Row: {
           id: string;
@@ -106,6 +186,8 @@ export type Database = {
           original_body: string;
           link_title: string | null;
           link_url: string | null;
+          link_image_url: string | null;
+          link_description: string | null;
           media_items: Json;
           original_hash: string | null;
           translation_status: "pending" | "translated" | "needs_review" | "failed";
@@ -114,6 +196,11 @@ export type Database = {
           share_count: number;
           view_count: number;
           is_deleted: boolean;
+          is_premium: boolean;
+          premium_energy_cost: number | null;
+          premium_unlock_count: number;
+          premium_total_earned: number;
+          content_format: string;
           created_at: string;
           updated_at: string;
         };
@@ -133,6 +220,8 @@ export type Database = {
           original_body: string;
           link_title?: string | null;
           link_url?: string | null;
+          link_image_url?: string | null;
+          link_description?: string | null;
           media_items?: Json;
           original_hash?: string | null;
           translation_status?: "pending" | "translated" | "needs_review" | "failed";
@@ -141,11 +230,45 @@ export type Database = {
           share_count?: number;
           view_count?: number;
           is_deleted?: boolean;
+          is_premium?: boolean;
+          premium_energy_cost?: number | null;
+          premium_unlock_count?: number;
+          premium_total_earned?: number;
+          content_format?: string;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["posts"]["Insert"]>;
         Relationships: [];
+      };
+      post_unlocks: {
+        Row: {
+          id: string;
+          post_id: string;
+          user_id: string;
+          energy_paid: number;
+          author_earned: number;
+          burn_amount: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          post_id: string;
+          user_id: string;
+          energy_paid: number;
+          author_earned: number;
+          burn_amount: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["post_unlocks"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "post_unlocks_post_id_fkey";
+            columns: ["post_id"];
+            referencedRelation: "posts";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       post_translations: {
         Row: {
@@ -617,6 +740,30 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["user_follows"]["Insert"]>;
         Relationships: [];
       };
+      user_interests: {
+        Row: {
+          id: string;
+          user_id: string;
+          topic_id: string;
+          score: number;
+          interaction_count: number;
+          last_interaction_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          topic_id: string;
+          score?: number;
+          interaction_count?: number;
+          last_interaction_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["user_interests"]["Insert"]>;
+        Relationships: [];
+      };
       wallets: {
         Row: {
           id: string;
@@ -799,6 +946,17 @@ export type Database = {
       };
     };
     Functions: {
+      get_recommended_post_ids: {
+        Args: {
+          p_user_id: string;
+          p_limit?: number;
+        };
+        Returns: { post_id: string; relevance_score: number }[];
+      };
+      decay_user_interests: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
       enqueue_missing_translations_for_post: {
         Args: {
           target_post_id: string;
@@ -909,6 +1067,18 @@ export type Database = {
           p_withdrawal_id: string;
         };
         Returns: void;
+      };
+      get_post_detail_secure: {
+        Args: {
+          p_post_id: string;
+        };
+        Returns: Json;
+      };
+      unlock_premium_post: {
+        Args: {
+          p_post_id: string;
+        };
+        Returns: Json;
       };
     };
     Enums: {

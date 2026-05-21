@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   RiArrowRightLine,
@@ -51,6 +52,7 @@ type CategoryKey = (typeof categoryKeys)[number];
 
 export default function ExplorePage() {
   const { dictionary, t } = useI18n();
+  const router = useRouter();
   const [attentions, setAttentions] = useState<ExploreAttention[]>(
     fallbackExploreAttentions,
   );
@@ -244,7 +246,7 @@ export default function ExplorePage() {
     .slice(0, 4);
 
   return (
-    <div className="min-h-screen border-x border-border bg-background">
+    <div className="min-h-screen bg-background">
       {isLoading ? <LoadingBar /> : null}
       <header className="sticky top-0 z-10 border-b border-border bg-background/90 px-4 py-3 backdrop-blur sm:px-6">
         <div className="flex items-center justify-between gap-3">
@@ -264,6 +266,11 @@ export default function ExplorePage() {
             type="search"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && searchTerm.trim()) {
+                router.push(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
+              }
+            }}
             placeholder={t(dictionary.explore.searchPlaceholder)}
             className="h-12 w-full rounded-full border border-border bg-muted/60 pl-12 pr-4 text-[15px] text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-blue-500 focus:bg-background focus:ring-2 focus:ring-blue-500/10"
           />

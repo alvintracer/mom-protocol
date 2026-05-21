@@ -89,20 +89,20 @@ export function AioStatusPipeline({ status }: { status: AssertionStatus }) {
   const isRejected = status === "rejected";
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-start gap-0 overflow-visible py-1">
       {PIPELINE_STEPS.map((step, idx) => {
         const isDone = idx < currentIdx || status === "finalized";
         const isCurrent = idx === currentIdx;
         const isError = isCurrent && isRejected;
 
         return (
-          <div key={step} className="flex items-center gap-1">
+          <div key={step} className="flex items-start gap-0 shrink-0">
             {idx > 0 && (
-              <div className={`h-0.5 w-4 rounded-full ${isDone ? "bg-emerald-500" : "bg-border"}`} />
+              <div className={`mt-3 h-0.5 w-3 shrink-0 rounded-full sm:w-5 ${isDone ? "bg-emerald-500" : "bg-border"}`} />
             )}
-            <div className="flex flex-col items-center gap-0.5">
+            <div className="flex w-[52px] flex-col items-center gap-1 sm:w-[60px]">
               <div
-                className={`flex size-6 items-center justify-center rounded-full text-[10px] font-black ${
+                className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${
                   isError
                     ? "bg-rose-500/10 text-rose-600"
                     : isDone
@@ -122,7 +122,7 @@ export function AioStatusPipeline({ status }: { status: AssertionStatus }) {
                   idx + 1
                 )}
               </div>
-              <span className="max-w-[60px] text-center text-[8px] font-bold leading-tight text-muted-foreground">
+              <span className="text-center text-[8px] font-bold leading-tight text-muted-foreground">
                 {statusLabels[step] ?? step}
               </span>
             </div>

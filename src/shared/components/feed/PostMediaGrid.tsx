@@ -19,11 +19,6 @@ type PostMediaGridProps = {
   variant?: "feed" | "detail";
 };
 
-/* ── Constants ───────────────────────────────────────── */
-
-const FEED_MAX_H = "max-h-[360px]";
-const DETAIL_MAX_H = "max-h-[500px]";
-
 /* ── Main Component ──────────────────────────────────── */
 
 export function PostMediaGrid({ items, variant = "feed" }: PostMediaGridProps) {
@@ -33,7 +28,6 @@ export function PostMediaGrid({ items, variant = "feed" }: PostMediaGridProps) {
 
   const images = items.filter((i) => i.type.startsWith("image/"));
   const videos = items.filter((i) => i.type.startsWith("video/"));
-  const maxH = variant === "detail" ? DETAIL_MAX_H : FEED_MAX_H;
 
   // ─── Video mode ───
   if (videos.length > 0) {
@@ -51,18 +45,19 @@ export function PostMediaGrid({ items, variant = "feed" }: PostMediaGridProps) {
 
   return (
     <>
-      <div className={`mt-3 overflow-hidden rounded-2xl border border-border ${maxH}`}>
+      {/* 16:9 aspect container keeps grid from stretching on wide screens */}
+      <div className="mt-3 aspect-video max-h-[420px] overflow-hidden rounded-2xl border border-border">
         {images.length === 1 && (
-          <SingleImage image={images[0]} maxH={maxH} onClick={() => openLightbox(0)} />
+          <SingleImage image={images[0]} onClick={() => openLightbox(0)} />
         )}
         {images.length === 2 && (
-          <TwoImages images={images} maxH={maxH} onClick={openLightbox} />
+          <TwoImages images={images} onClick={openLightbox} />
         )}
         {images.length === 3 && (
-          <ThreeImages images={images} maxH={maxH} onClick={openLightbox} />
+          <ThreeImages images={images} onClick={openLightbox} />
         )}
         {images.length >= 4 && (
-          <FourImages images={images.slice(0, 4)} maxH={maxH} onClick={openLightbox} />
+          <FourImages images={images.slice(0, 4)} onClick={openLightbox} />
         )}
       </div>
 
@@ -81,19 +76,17 @@ export function PostMediaGrid({ items, variant = "feed" }: PostMediaGridProps) {
 
 function SingleImage({
   image,
-  maxH,
   onClick,
 }: {
   image: MediaItem;
-  maxH: string;
   onClick: () => void;
 }) {
   return (
-    <button type="button" onClick={onClick} className={`block w-full ${maxH}`}>
+    <button type="button" onClick={onClick} className="block h-full w-full">
       <img
         src={image.url}
         alt={image.name || ""}
-        className={`h-full w-full object-cover ${maxH}`}
+        className="h-full w-full object-cover"
         loading="lazy"
       />
     </button>
@@ -102,15 +95,13 @@ function SingleImage({
 
 function TwoImages({
   images,
-  maxH,
   onClick,
 }: {
   images: MediaItem[];
-  maxH: string;
   onClick: (i: number) => void;
 }) {
   return (
-    <div className={`grid grid-cols-2 gap-0.5 ${maxH}`}>
+    <div className="grid h-full grid-cols-2 gap-0.5">
       {images.map((img, idx) => (
         <button key={idx} type="button" onClick={() => onClick(idx)} className="overflow-hidden">
           <img
@@ -127,16 +118,14 @@ function TwoImages({
 
 function ThreeImages({
   images,
-  maxH,
   onClick,
 }: {
   images: MediaItem[];
-  maxH: string;
   onClick: (i: number) => void;
 }) {
   return (
-    <div className={`grid grid-cols-2 gap-0.5 ${maxH}`}>
-      {/* Left: large */}
+    <div className="grid h-full grid-cols-2 grid-rows-2 gap-0.5">
+      {/* Left: large spanning 2 rows */}
       <button type="button" onClick={() => onClick(0)} className="row-span-2 overflow-hidden">
         <img
           src={images[0].url}
@@ -168,15 +157,13 @@ function ThreeImages({
 
 function FourImages({
   images,
-  maxH,
   onClick,
 }: {
   images: MediaItem[];
-  maxH: string;
   onClick: (i: number) => void;
 }) {
   return (
-    <div className={`grid grid-cols-2 grid-rows-2 gap-0.5 ${maxH}`}>
+    <div className="grid h-full grid-cols-2 grid-rows-2 gap-0.5">
       {images.map((img, idx) => (
         <button key={idx} type="button" onClick={() => onClick(idx)} className="overflow-hidden">
           <img
@@ -197,8 +184,6 @@ function VideoPlayer({ src, variant }: { src: string; variant: "feed" | "detail"
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
   const [playing, setPlaying] = useState(false);
-
-  const maxH = variant === "detail" ? "max-h-[500px]" : "max-h-[400px]";
 
   const togglePlay = () => {
     const v = videoRef.current;
@@ -222,13 +207,13 @@ function VideoPlayer({ src, variant }: { src: string; variant: "feed" | "detail"
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border border-border bg-black ${maxH}`}
+      className="relative aspect-video max-h-[420px] overflow-hidden rounded-2xl border border-border bg-black"
       onClick={togglePlay}
     >
       <video
         ref={videoRef}
         src={src}
-        className={`w-full ${maxH} object-contain`}
+        className="h-full w-full object-contain"
         muted={muted}
         playsInline
         loop

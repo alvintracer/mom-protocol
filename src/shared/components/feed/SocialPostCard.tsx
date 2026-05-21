@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   RiBarChartGroupedLine,
   RiHashtag,
@@ -17,7 +17,9 @@ import {
 import type { Event, SocialPost } from "@/shared/types/domain";
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
+import { BookmarkButton } from "./BookmarkButton";
 import { PostMediaGrid } from "./PostMediaGrid";
+import { PostOptionMenu } from "./PostOptionMenu";
 
 type SocialPostCardProps = {
   post: SocialPost;
@@ -26,14 +28,31 @@ type SocialPostCardProps = {
   translatedBody?: string;
   /** Translated title text (overrides post.title if provided) */
   translatedTitle?: string | null;
+  /** Current user ID for option menu ownership detection */
+  currentUserId?: string | null;
+  /** Called when the post is hidden/deleted from feed */
+  onRemoved?: () => void;
 };
 
-export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTitle }: SocialPostCardProps) {
+export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTitle, currentUserId, onRemoved }: SocialPostCardProps) {
   const { dictionary, t } = useI18n();
   const router = useRouter();
   const [likeCount, setLikeCount] = useState(post.likeCount);
   const [hasLiked, setHasLiked] = useState(false);
   const [repostCount, setRepostCount] = useState(post.repostCount);
+  const [userId, setUserId] = useState<string | null>(currentUserId ?? null);
+
+  // Resolve current user ID if not passed
+  useEffect(() => {
+    if (currentUserId !== undefined) {
+      setUserId(currentUserId);
+      return;
+    }
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+    });
+  }, [currentUserId]);
 
   const handleLike = useCallback(
     async (event: React.MouseEvent) => {
@@ -56,25 +75,13 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
     [post.id],
   );
 
-  const handleRepost = useCallback(
-    async (event: React.MouseEvent) => {
+  const handleQuoteRepost = useCallback(
+    (event: React.MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
-      const supabase = createClient();
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
-
-      const { error } = await supabase.rpc("create_repost", {
-        target_post_id: post.id,
-        quote_body: null,
-        quote_language: "ko",
-      });
-
-      if (!error) {
-        setRepostCount((c) => c + 1);
-      }
+      router.push(`/posts/new?quote=${post.id}`);
     },
-    [post.id],
+    [post.id, router],
   );
 
   return (
@@ -90,11 +97,25 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
                 {t(post.authorName)} reposted
               </p>
             ) : null}
-            <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[15px]">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[15px]">
               <span className="font-bold text-foreground">{t(post.authorName)}</span>
               <span className="text-[13px] text-muted-foreground">@{post.authorHandle}</span>
+              {post.isPremium && (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  💎 {t(dictionary.postDetail.premiumBadge)}
+                </span>
+              )}
               <span className="text-[13px] text-muted-foreground">·</span>
               <span className="text-[13px] text-muted-foreground">{t(post.createdAtLabel)}</span>
+              <div className="ml-auto">
+                <PostOptionMenu
+                  postId={post.id}
+                  authorId={post.authorId}
+                  currentUserId={userId}
+                  variant="compact"
+                  onDeleted={onRemoved}
+                />
+              </div>
             </div>
 
             {(translatedTitle ?? post.title) ? (
@@ -113,8 +134,10 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
                 {post.selectedOutcome.toUpperCase()}
               </span>
             ) : null}
-            <p className="mt-2 whitespace-pre-wrap text-[15px] leading-6 text-foreground">
-              {translatedBody ?? post.body}
+            <p className="mt-2 whitespace-pre-wrap text-[15px] leading-6 text-foreground line-clamp-4">
+              {post.contentFormat === "html"
+                ? stripHtml(translatedBody ?? post.body)
+                : (translatedBody ?? post.body)}
             </p>
 
             {post.mediaItems && post.mediaItems.length > 0 ? (
@@ -127,7 +150,7 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
             ) : null}
 
             {post.repostOf ? (
-              <div className="mt-3 rounded-xl border border-border p-3">
+              <div className="mt-3 max-w-[746px] rounded-xl border border-border p-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-[13px]">
                   <span className="font-black text-foreground">
                     {t(post.repostOf.authorName)}
@@ -139,11 +162,30 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
                 <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm font-medium leading-6 text-foreground">
                   {post.repostOf.body || "Repost"}
                 </p>
+                {post.repostOf.mediaItems && post.repostOf.mediaItems.length > 0 ? (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-border bg-black/5 aspect-video w-full">
+                    {post.repostOf.mediaItems[0].type.startsWith("video/") ? (
+                      <video
+                        src={post.repostOf.mediaItems[0].previewUrl}
+                        className="h-full w-full object-contain bg-black"
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+                    ) : (
+                      <img
+                        src={post.repostOf.mediaItems[0].previewUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
             {linkedEvent ? (
-              <div className="mt-3 rounded-xl border border-border bg-zinc-50/50 dark:bg-zinc-900/30 p-3.5 transition-colors hover:border-blue-300 dark:hover:border-blue-500/40">
+              <div className="mt-3 w-full max-w-[746px] rounded-xl border border-border bg-zinc-50/50 p-3.5 transition-colors hover:border-blue-300 dark:bg-zinc-900/30 dark:hover:border-blue-500/40">
                 <p className="text-[11px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
                   {t(dictionary.home.linkedAttention)}
                 </p>
@@ -157,7 +199,30 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
             ) : null}
 
             {post.externalPreview ? (
-              <div className="mt-3 rounded-lg border border-border p-3">
+              <div
+                role="link"
+                tabIndex={0}
+                className="mt-3 block max-w-[746px] cursor-pointer rounded-lg border border-border p-3 transition-colors hover:border-blue-500"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.open(post.externalUrl ?? "#", "_blank", "noreferrer");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.open(post.externalUrl ?? "#", "_blank", "noreferrer");
+                  }
+                }}
+              >
+                {post.externalPreview.imageUrl && (
+                  <img 
+                    src={post.externalPreview.imageUrl} 
+                    alt="" 
+                    className="mb-3 w-full max-h-48 object-cover rounded-lg"
+                  />
+                )}
                 <div className="flex items-center gap-2 text-[12px] font-bold text-blue-600">
                   <RiLinksLine className="size-4" />
                   {post.externalPreview.sourceName}
@@ -195,7 +260,7 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
               <ActionIcon
                 icon={<RiRepeat2Line className="size-[17px]" />}
                 count={repostCount}
-                onClick={handleRepost}
+                onClick={handleQuoteRepost}
                 hoverColor="green"
               />
               <ActionIcon
@@ -212,6 +277,7 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
                 active={hasLiked}
               />
               <ActionIcon icon={<RiBarChartGroupedLine className="size-[17px]" />} count={post.viewCount} />
+              <BookmarkButton targetType="post" targetId={post.id} variant="icon" />
               <ActionIcon
                 icon={<RiShareForwardLine className="size-[17px]" />}
                 onClick={async (event) => {
@@ -295,4 +361,19 @@ function formatBytes(bytes: number) {
   }
 
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }

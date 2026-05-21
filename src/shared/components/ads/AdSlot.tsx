@@ -201,6 +201,8 @@ function AdSenseUnit({ client, slot, format }: { client: string; slot: string; f
 
     function tryPush() {
       if (pushed.current) return;
+      // Don't push if container has no width (causes AdSense error)
+      if (containerRef.current && containerRef.current.offsetWidth === 0) return;
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ads = (window as any).adsbygoogle;
