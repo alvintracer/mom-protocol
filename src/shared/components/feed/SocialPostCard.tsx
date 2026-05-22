@@ -85,7 +85,12 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
   );
 
   return (
-    <article className="border-b border-border bg-background transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-900/30">
+    <article className={`border-b border-border bg-background transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-900/30 ${post.isPinned ? "border-l-2 border-l-amber-400" : ""}`}>
+      {post.isPinned && (
+        <div className="flex items-center gap-1.5 px-4 pt-2.5 sm:px-5 text-[11px] font-black text-amber-600 dark:text-amber-400">
+          <span>📌</span> 고정된 게시물
+        </div>
+      )}
       <Link href={`/posts/${post.id}`} className="block px-4 py-3.5 sm:px-5">
         <div className="flex gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-zinc-800 to-zinc-950 dark:from-zinc-100 dark:to-white text-sm font-bold text-white dark:text-zinc-950 ring-2 ring-background">
@@ -134,6 +139,54 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
                 {post.selectedOutcome.toUpperCase()}
               </span>
             ) : null}
+
+            {linkedEvent ? (
+              <div
+                role="link"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.location.href = `/a/${linkedEvent.slug || linkedEvent.id}`;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.location.href = `/a/${linkedEvent.slug || linkedEvent.id}`;
+                  }
+                }}
+                className="mt-2 w-full max-w-[746px] cursor-pointer rounded-xl border border-border bg-zinc-50/50 p-3.5 transition-colors hover:border-blue-300 dark:bg-zinc-900/30 dark:hover:border-blue-500/40"
+              >
+                <p className="text-[11px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  {t(dictionary.home.linkedAttention)}
+                </p>
+                <p className="mt-1.5 text-sm font-black leading-5 text-foreground">
+                  {t(linkedEvent.title)}
+                </p>
+                <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-muted-foreground">
+                  {t(linkedEvent.summary)}
+                </p>
+                {linkedEvent.sponsor && (
+                  <div className="mt-2 flex items-center justify-end gap-1.5">
+                    <span className="text-[10px] font-bold text-muted-foreground">
+                      {linkedEvent.sponsor.tagline || "Sponsored by"}
+                    </span>
+                    {linkedEvent.sponsor.logoUrl ? (
+                      <img
+                        src={linkedEvent.sponsor.logoUrl}
+                        alt={linkedEvent.sponsor.name}
+                        className="size-4 rounded-sm object-contain"
+                      />
+                    ) : null}
+                    <span className="text-[10px] font-black text-foreground">
+                      {linkedEvent.sponsor.name}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
             <p className="mt-2 whitespace-pre-wrap text-[15px] leading-6 text-foreground line-clamp-4">
               {post.contentFormat === "html"
                 ? stripHtml(translatedBody ?? post.body)
@@ -184,19 +237,7 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
               </div>
             ) : null}
 
-            {linkedEvent ? (
-              <div className="mt-3 w-full max-w-[746px] rounded-xl border border-border bg-zinc-50/50 p-3.5 transition-colors hover:border-blue-300 dark:bg-zinc-900/30 dark:hover:border-blue-500/40">
-                <p className="text-[11px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                  {t(dictionary.home.linkedAttention)}
-                </p>
-                <p className="mt-1.5 text-sm font-black leading-5 text-foreground">
-                  {t(linkedEvent.title)}
-                </p>
-                <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-muted-foreground">
-                  {t(linkedEvent.summary)}
-                </p>
-              </div>
-            ) : null}
+
 
             {post.externalPreview ? (
               <div

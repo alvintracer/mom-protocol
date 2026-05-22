@@ -144,9 +144,18 @@ function GeneralBidForm({
   const [destUrl, setDestUrl] = useState("");
   const [position, setPosition] = useState("sidebar");
   const [bidAmount, setBidAmount] = useState("");
+  const [bidInputMode, setBidInputMode] = useState<"mom" | "usd">("mom");
+  const [momRate, setMomRate] = useState(0.001);
   const [days, setDays] = useState(7);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/rate")
+      .then((r) => r.json())
+      .then((d) => { if (d.rate) setMomRate(Number(d.rate)); })
+      .catch(() => {});
+  }, []);
 
   const positions = [
     { value: "sidebar", label: t(d.positions.sidebar) },
@@ -185,12 +194,13 @@ function GeneralBidForm({
       return;
     }
 
-    // 2. Submit bid
+    // 2. Submit bid — always submit in MOM
+    const bidMom = bidInputMode === "usd" ? Math.round((parseFloat(bidAmount) || 0) / momRate) : (parseFloat(bidAmount) || 0);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any).rpc("submit_ad_bid", {
       p_campaign_id: campaign.id,
       p_position: position,
-      p_bid_amount: parseFloat(bidAmount),
+      p_bid_amount: bidMom,
       p_starts_at: now.toISOString(),
       p_ends_at: end.toISOString(),
     });
@@ -199,10 +209,10 @@ function GeneralBidForm({
       setResult(error.message?.includes("insufficient") ? "insufficient" : "error");
     } else {
       setResult("success");
-      setUserEnergy(userEnergy - parseFloat(bidAmount));
+      setUserEnergy(userEnergy - bidMom);
     }
     setSubmitting(false);
-  }, [title, body, destUrl, position, bidAmount, days, userId, userEnergy, setUserEnergy]);
+  }, [title, body, destUrl, position, bidAmount, bidInputMode, momRate, days, userId, userEnergy, setUserEnergy]);
 
   return (
     <div className="space-y-5">
@@ -270,15 +280,42 @@ function GeneralBidForm({
         </FormField>
 
         <div className="grid grid-cols-2 gap-3">
-          <FormField label={`${t(d.bidAmountLabel)} (MOM)`}>
-            <input
-              type="number"
-              value={bidAmount}
-              onChange={(e) => setBidAmount(e.target.value)}
-              placeholder="100"
-              min={1}
-              className="input-field"
-            />
+          <FormField label={t(d.bidAmountLabel)}>
+            <div className="relative">
+              <input
+                type="number"
+                value={bidAmount}
+                onChange={(e) => setBidAmount(e.target.value)}
+                placeholder={bidInputMode === "mom" ? "100" : "1.00"}
+                min={bidInputMode === "mom" ? 1 : 0.01}
+                step={bidInputMode === "usd" ? "0.01" : "1"}
+                className="input-field pr-20"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const numVal = parseFloat(bidAmount) || 0;
+                  if (bidInputMode === "mom") {
+                    setBidInputMode("usd");
+                    setBidAmount(numVal > 0 ? (numVal * momRate).toFixed(2) : "");
+                  } else {
+                    setBidInputMode("mom");
+                    setBidAmount(numVal > 0 ? Math.round(numVal / momRate).toString() : "");
+                  }
+                }}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-lg border border-border bg-zinc-100 px-2 py-1 text-[10px] font-black text-muted-foreground transition-colors hover:border-blue-400 hover:text-blue-600 dark:bg-zinc-800"
+              >
+                {bidInputMode === "mom" ? "MOM" : "USD"}
+                <span className="text-[9px]">⇄</span>
+              </button>
+            </div>
+            {parseFloat(bidAmount) > 0 && (
+              <p className="mt-1 text-[11px] font-bold text-muted-foreground">
+                ≒ {bidInputMode === "mom"
+                  ? `$${(parseFloat(bidAmount) * momRate).toFixed(2)} USD`
+                  : `${Math.round(parseFloat(bidAmount) / momRate).toLocaleString()} MOM`}
+              </p>
+            )}
           </FormField>
           <FormField label={t(d.duration)}>
             <div className="flex items-center gap-2">
@@ -345,9 +382,18 @@ function SponsorshipForm({
   const [sponsorUrl, setSponsorUrl] = useState("");
   const [color, setColor] = useState("#3b82f6");
   const [bidAmount, setBidAmount] = useState("");
+  const [bidInputMode, setBidInputMode] = useState<"mom" | "usd">("mom");
+  const [momRate, setMomRate] = useState(0.001);
   const [days, setDays] = useState(30);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/rate")
+      .then((r) => r.json())
+      .then((d) => { if (d.rate) setMomRate(Number(d.rate)); })
+      .catch(() => {});
+  }, []);
 
   // Load attention list
   useEffect(() => {
@@ -380,11 +426,12 @@ function SponsorshipForm({
     const end = new Date(now.getTime() + days * 86400000);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bidMom = bidInputMode === "usd" ? Math.round((parseFloat(bidAmount) || 0) / momRate) : (parseFloat(bidAmount) || 0);
     const { data, error } = await (supabase as any).rpc("submit_attention_sponsorship", {
       p_cluster_id: selectedCluster,
       p_sponsor_name: sponsorName,
       p_sponsor_url: sponsorUrl,
-      p_bid_amount: parseFloat(bidAmount),
+      p_bid_amount: bidMom,
       p_starts_at: now.toISOString(),
       p_ends_at: end.toISOString(),
       p_sponsor_tagline: tagline || null,
@@ -395,12 +442,12 @@ function SponsorshipForm({
       setResult(error.message?.includes("insufficient") ? "insufficient" : "error");
     } else {
       setResult("success");
-      setUserEnergy(userEnergy - parseFloat(bidAmount));
+      setUserEnergy(userEnergy - bidMom);
     }
     setSubmitting(false);
-  }, [selectedCluster, sponsorName, sponsorUrl, tagline, color, bidAmount, days, userId, userEnergy, setUserEnergy]);
+  }, [selectedCluster, sponsorName, sponsorUrl, tagline, color, bidAmount, bidInputMode, momRate, days, userId, userEnergy, setUserEnergy]);
 
-  const bidNum = parseFloat(bidAmount) || 0;
+  const bidNum = bidInputMode === "usd" ? Math.round((parseFloat(bidAmount) || 0) / momRate) : (parseFloat(bidAmount) || 0);
 
   return (
     <div className="space-y-5">
@@ -489,15 +536,42 @@ function SponsorshipForm({
         </FormField>
 
         <div className="grid grid-cols-2 gap-3">
-          <FormField label={`${t(d.bidAmountLabel)} (MOM)`}>
-            <input
-              type="number"
-              value={bidAmount}
-              onChange={(e) => setBidAmount(e.target.value)}
-              placeholder="100"
-              min={100}
-              className="input-field"
-            />
+          <FormField label={t(d.bidAmountLabel)}>
+            <div className="relative">
+              <input
+                type="number"
+                value={bidAmount}
+                onChange={(e) => setBidAmount(e.target.value)}
+                placeholder={bidInputMode === "mom" ? "100" : "1.00"}
+                min={bidInputMode === "mom" ? 100 : 0.10}
+                step={bidInputMode === "usd" ? "0.01" : "1"}
+                className="input-field pr-20"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const numVal = parseFloat(bidAmount) || 0;
+                  if (bidInputMode === "mom") {
+                    setBidInputMode("usd");
+                    setBidAmount(numVal > 0 ? (numVal * momRate).toFixed(2) : "");
+                  } else {
+                    setBidInputMode("mom");
+                    setBidAmount(numVal > 0 ? Math.round(numVal / momRate).toString() : "");
+                  }
+                }}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-lg border border-border bg-zinc-100 px-2 py-1 text-[10px] font-black text-muted-foreground transition-colors hover:border-indigo-400 hover:text-indigo-600 dark:bg-zinc-800"
+              >
+                {bidInputMode === "mom" ? "MOM" : "USD"}
+                <span className="text-[9px]">⇄</span>
+              </button>
+            </div>
+            {parseFloat(bidAmount) > 0 && (
+              <p className="mt-1 text-[11px] font-bold text-muted-foreground">
+                ≒ {bidInputMode === "mom"
+                  ? `$${(parseFloat(bidAmount) * momRate).toFixed(2)} USD`
+                  : `${Math.round(parseFloat(bidAmount) / momRate).toLocaleString()} MOM`}
+              </p>
+            )}
           </FormField>
           <FormField label={t(d.duration)}>
             <div className="flex items-center gap-2">
@@ -529,6 +603,11 @@ function SponsorshipForm({
             <div className="flex justify-between text-[12px]">
               <span className="text-muted-foreground">{t(d.builderReward)} (20%)</span>
               <span className="font-black text-emerald-600 dark:text-emerald-400">+{Math.round(bidNum * 0.2)} MOM</span>
+            </div>
+            <div className="h-px bg-border my-1" />
+            <div className="flex justify-between text-[12px]">
+              <span className="font-bold text-muted-foreground">Total</span>
+              <span className="font-black text-foreground">{bidNum.toLocaleString()} MOM ≒ ${(bidNum * momRate).toFixed(2)}</span>
             </div>
           </div>
         )}

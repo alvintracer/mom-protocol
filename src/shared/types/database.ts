@@ -201,6 +201,7 @@ export type Database = {
           premium_unlock_count: number;
           premium_total_earned: number;
           content_format: string;
+          is_pinned: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -235,6 +236,7 @@ export type Database = {
           premium_unlock_count?: number;
           premium_total_earned?: number;
           content_format?: string;
+          is_pinned?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -824,6 +826,50 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["payments"]["Insert"]>;
+        Relationships: [];
+      };
+      attention_sponsorships: {
+        Row: {
+          id: string;
+          cluster_id: string;
+          sponsor_id: string;
+          sponsor_name: string;
+          sponsor_logo_url: string | null;
+          sponsor_tagline: string | null;
+          sponsor_url: string;
+          sponsor_color: string | null;
+          bid_amount: number;
+          bid_currency: string;
+          starts_at: string;
+          ends_at: string;
+          energy_granted: number;
+          status: string;
+          impression_count: number;
+          click_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          cluster_id: string;
+          sponsor_id: string;
+          sponsor_name: string;
+          sponsor_logo_url?: string | null;
+          sponsor_tagline?: string | null;
+          sponsor_url: string;
+          sponsor_color?: string | null;
+          bid_amount: number;
+          bid_currency?: string;
+          starts_at?: string;
+          ends_at: string;
+          energy_granted?: number;
+          status?: string;
+          impression_count?: number;
+          click_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["attention_sponsorships"]["Insert"]>;
         Relationships: [];
       };
       platform_revenue_ledger: {

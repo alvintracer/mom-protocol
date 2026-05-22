@@ -20,6 +20,7 @@ import {
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
 import { PremiumEditor } from "@/shared/components/editor/PremiumEditor";
+import { isOfficialAccount } from "@/shared/lib/admin";
 import type { Database, Json, SupportedLanguage } from "@/shared/types/database";
 
 type AttentionRow = Database["public"]["Tables"]["attention_clusters"]["Row"];
@@ -90,6 +91,8 @@ function NewPostContent() {
   const [premiumCost, setPremiumCost] = useState<string>("");
   const [momRate, setMomRate] = useState<number>(0.001);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [userHandle, setUserHandle] = useState<string | null>(null);
+  const [isPinned, setIsPinned] = useState(false);
   // Topic picker
   const [selectedTopics, setSelectedTopics] = useState<{ slug: string; label: string }[]>([]);
   const [topicQuery, setTopicQuery] = useState("");
@@ -257,8 +260,16 @@ function NewPostContent() {
       .then((r) => r.json())
       .then((d) => { if (d.rate) setMomRate(d.rate); })
       .catch(() => {});
-    createClient().auth.getUser().then(({ data }) => {
-      if (data.user) setCurrentUserId(data.user.id);
+    createClient().auth.getUser().then(async ({ data }) => {
+      if (data.user) {
+        setCurrentUserId(data.user.id);
+        const { data: profile } = await createClient()
+          .from("profiles")
+          .select("handle")
+          .eq("id", data.user.id)
+          .maybeSingle();
+        if (profile?.handle) setUserHandle(profile.handle);
+      }
     });
   }, []);
 
@@ -525,6 +536,7 @@ function NewPostContent() {
           is_premium: isPremium,
           premium_energy_cost: isPremium && premiumCost ? Number(premiumCost) : null,
           content_format: isPremium ? "html" : "plain",
+          is_pinned: isOfficialAccount(userHandle) && isPinned,
         })
         .select("id")
         .single();
@@ -644,6 +656,40 @@ function NewPostContent() {
               </div>
             )}
           </section>
+
+          {/* Admin: Pin to top — only for official account */}
+          {isOfficialAccount(userHandle) && (
+            <section className="rounded-2xl border border-amber-300/50 bg-amber-50/30 shadow-sm overflow-hidden dark:border-amber-500/20 dark:bg-amber-900/10">
+              <button
+                type="button"
+                onClick={() => setIsPinned(!isPinned)}
+                className="flex h-14 w-full items-center gap-3 px-4 text-left"
+              >
+                <div className={`flex size-8 items-center justify-center rounded-lg transition-colors ${
+                  isPinned ? "bg-amber-500/15 text-amber-600" : "bg-zinc-100 text-muted-foreground dark:bg-zinc-800"
+                }`}>
+                  📌
+                </div>
+                <div className="flex-1">
+                  <span className={`text-sm font-black ${isPinned ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+                    홈 피드 상단 고정
+                  </span>
+                  <p className="text-[11px] font-medium text-muted-foreground">
+                    momment. 공식 계정 전용
+                  </p>
+                </div>
+                <div className={`flex size-5 items-center justify-center rounded-full border-2 transition-all ${
+                  isPinned ? "border-amber-500 bg-amber-500" : "border-border"
+                }`}>
+                  {isPinned && (
+                    <svg viewBox="0 0 12 12" className="size-3 text-white">
+                      <path d="M3.5 6.5L5 8l3.5-4" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </div>
+              </button>
+            </section>
+          )}
 
           <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
             <button

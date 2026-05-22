@@ -10,7 +10,7 @@ import { createClient } from "@/shared/lib/supabase/client";
 import { FeedSkeleton, LoadingBar } from "@/shared/components/ui/LoadingStates";
 import { AdSlot } from "@/shared/components/ads/AdSlot";
 import type { Database } from "@/shared/types/database";
-import type { SocialPost } from "@/shared/types/domain";
+import type { Event, SocialPost } from "@/shared/types/domain";
 import { useContentTranslations } from "@/shared/hooks/useContentTranslations";
 import { RiHashtag } from "react-icons/ri";
 
@@ -46,6 +46,7 @@ function HomeFeed() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
+  const [eventsMap, setEventsMap] = useState<Map<string, Event>>(new Map());
   const [userTopics, setUserTopics] = useState<{ slug: string; label: string; score: number }[]>([]);
   const [activeTopicFilter, setActiveTopicFilter] = useState<string | null>(null);
 
@@ -157,6 +158,22 @@ function HomeFeed() {
         const { data: allPosts } = await postQuery;
         feedData = allPosts ?? [];
       }
+
+      // Fetch pinned posts and prepend to feed
+      const { data: pinnedPosts } = await supabase
+        .from("posts")
+        .select("*")
+        .eq("is_pinned", true)
+        .eq("is_deleted", false)
+        .eq("visibility", "public")
+        .order("created_at", { ascending: false });
+
+      if (pinnedPosts && pinnedPosts.length > 0) {
+        const pinnedIds = new Set(pinnedPosts.map((p) => p.id));
+        const nonPinned = feedData.filter((p) => !pinnedIds.has(p.id));
+        feedData = [...pinnedPosts, ...nonPinned];
+      }
+
       const rows = feedData;
       const repostSourceIds = Array.from(
         new Set(rows.map((post) => post.repost_of_post_id).filter(Boolean)),
@@ -196,6 +213,27 @@ function HomeFeed() {
             : Promise.resolve({ data: [] as { target_id: string; source: string; topics: { slug: string; canonical_label: string; labels: Record<string, string>; kind: string } }[] }),
         ]);
 
+      // Fetch active sponsorships for these attention clusters
+      let sponsorsByClusterId = new Map<string, { name: string; logoUrl?: string | null; tagline?: string | null; url: string; color?: string | null }>();
+      if (attentionIds.length > 0) {
+        const { data: sponsorRows } = await supabase
+          .from("attention_sponsorships")
+          .select("cluster_id, sponsor_name, sponsor_logo_url, sponsor_tagline, sponsor_url, sponsor_color")
+          .in("cluster_id", attentionIds)
+          .eq("status", "active");
+        if (sponsorRows) {
+          for (const s of sponsorRows) {
+            sponsorsByClusterId.set(s.cluster_id, {
+              name: s.sponsor_name,
+              logoUrl: s.sponsor_logo_url,
+              tagline: s.sponsor_tagline,
+              url: s.sponsor_url,
+              color: s.sponsor_color,
+            });
+          }
+        }
+      }
+
       if (!mounted) {
         return;
       }
@@ -220,6 +258,32 @@ function HomeFeed() {
       const attentionsById = new Map(
         (postAttentionRows ?? []).map((attention) => [attention.id, attention]),
       );
+
+      // Build Event map for linkedEvent prop
+      const eventsById = new Map<string, Event>();
+      for (const [id, a] of attentionsById) {
+        const sponsor = sponsorsByClusterId.get(id) ?? null;
+        eventsById.set(id, {
+          id: a.id,
+          slug: a.slug,
+          title: text(a.title, a.title, a.title),
+          summary: text(a.description ?? "", a.description ?? "", a.description ?? ""),
+          category: (a.category as Event["category"]) ?? "기타",
+          status: "open",
+          attentionScore: a.attention_score ?? 0,
+          participantCount: 0,
+          evidenceCount: 0,
+          predictionCount: 0,
+          endsAt: "",
+          sourceName: text("", "", ""),
+          sourceUrl: "",
+          oracleState: "대기",
+          tags: [],
+          sponsor,
+        });
+      }
+
+      setEventsMap(eventsById);
 
       setAuthUser(
         user
@@ -380,7 +444,7 @@ function HomeFeed() {
           <div key={post.id}>
             <SocialPostCard
               post={post}
-              linkedEvent={null}
+              linkedEvent={post.linkedEventId ? eventsMap.get(post.linkedEventId) ?? null : null}
               translatedBody={getPostBody(post.id, post.body)}
               translatedTitle={getPostTitle(post.id, post.title)}
               currentUserId={authUser?.id ?? null}
@@ -508,6 +572,7 @@ function mapPostRowToSocialPost(
     isPremium: row.is_premium,
     premiumEnergyCost: row.premium_energy_cost,
     contentFormat: row.content_format,
+    isPinned: row.is_pinned,
   };
 }
 

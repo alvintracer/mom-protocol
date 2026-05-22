@@ -19,6 +19,7 @@ export const eventCategoryLabels: Record<EventCategory, LocalizedText> = {
 
 export type Event = {
   id: string;
+  slug?: string | null;
   title: LocalizedText;
   summary: LocalizedText;
   category: EventCategory;
@@ -32,6 +33,13 @@ export type Event = {
   sourceUrl: string;
   oracleState: "대기" | "검증 중" | "검증 완료";
   tags: LocalizedText[];
+  sponsor?: {
+    name: string;
+    logoUrl?: string | null;
+    tagline?: string | null;
+    url: string;
+    color?: string | null;
+  } | null;
 };
 
 export type Creator = {
@@ -156,4 +164,5 @@ export type SocialPost = {
   isPremium?: boolean;
   premiumEnergyCost?: number | null;
   contentFormat?: string;
+  isPinned?: boolean;
 };

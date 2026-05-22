@@ -184,7 +184,7 @@ export function LeftSidebar() {
             <div>
               <p className="font-medium text-muted-foreground">{t(dictionary.sidebar.totalAssets)}</p>
               <p className="font-black tabular-nums text-foreground">
-                ${(Number(profile.mom_energy) * momRate).toFixed(2)}
+                ≒ ${(Number(profile.mom_energy) * momRate).toFixed(2)}
               </p>
             </div>
             <div className="border-l border-border pl-3">

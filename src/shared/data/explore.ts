@@ -16,6 +16,13 @@ export type ExploreAttention = {
   topics: string[];
   endsInLabel: LocalizedText;
   ruleStatus: "ready" | "draft";
+  sponsor?: {
+    name: string;
+    logoUrl?: string | null;
+    tagline?: string | null;
+    url: string;
+    color?: string | null;
+  } | null;
 };
 
 export type ExploreTopic = {

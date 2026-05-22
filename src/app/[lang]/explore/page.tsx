@@ -108,7 +108,7 @@ export default function ExplorePage() {
       }
 
       const clusterIds = clusterRows.map((cluster) => cluster.id);
-      const [{ data: sourceRows }, { data: membershipRows }] = await Promise.all([
+      const [{ data: sourceRows }, { data: membershipRows }, { data: sponsorRows }] = await Promise.all([
         supabase
           .from("attention_sources")
           .select("*")
@@ -117,7 +117,25 @@ export default function ExplorePage() {
           .from("attention_memberships")
           .select("*")
           .in("attention_cluster_id", clusterIds),
+        supabase
+          .from("attention_sponsorships")
+          .select("cluster_id, sponsor_name, sponsor_logo_url, sponsor_tagline, sponsor_url, sponsor_color")
+          .in("cluster_id", clusterIds)
+          .eq("status", "active"),
       ]);
+
+      const sponsorMap = new Map<string, { name: string; logoUrl?: string | null; tagline?: string | null; url: string; color?: string | null }>();
+      if (sponsorRows) {
+        for (const s of sponsorRows) {
+          sponsorMap.set(s.cluster_id, {
+            name: s.sponsor_name,
+            logoUrl: s.sponsor_logo_url,
+            tagline: s.sponsor_tagline,
+            url: s.sponsor_url,
+            color: s.sponsor_color,
+          });
+        }
+      }
 
       if (!mounted) {
         return;
@@ -135,6 +153,7 @@ export default function ExplorePage() {
             dictionary.explore.live,
             dictionary.explore.awaitingResolution,
             dictionary.explore.daysLeft,
+            sponsorMap.get(cluster.id) ?? null,
           ),
         ),
       );
@@ -284,7 +303,7 @@ export default function ExplorePage() {
             title={t(dictionary.explore.breaking)}
             description={t(dictionary.explore.breakingDesc)}
           />
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 min-[1700px]:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 min-[1750px]:grid-cols-5">
             {breaking.map((attention) => (
               <ExploreAttentionCard key={attention.id} attention={attention} featured />
             ))}
@@ -450,7 +469,7 @@ export default function ExplorePage() {
           {isLoading ? (
             <AttentionGridSkeleton />
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 min-[1450px]:grid-cols-4 min-[1900px]:grid-cols-5">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 min-[1750px]:grid-cols-5">
               {filteredAttentions.map((attention) => (
                 <ExploreAttentionCard key={attention.id} attention={attention} />
               ))}
@@ -486,8 +505,8 @@ function ExploreAttentionCard({
     <Link
       href={`/a/${slug}`}
       className={[
-        "group flex min-h-48 flex-col rounded-2xl border border-border bg-background p-3.5 transition-all hover:-translate-y-0.5 hover:bg-zinc-50 hover:shadow-sm dark:hover:bg-zinc-900/50",
-        featured ? "md:min-h-56" : "",
+        "group flex flex-col rounded-2xl border border-border bg-background p-3.5 transition-all hover:-translate-y-0.5 hover:bg-zinc-50 hover:shadow-sm dark:hover:bg-zinc-900/50",
+        featured ? "min-h-48 md:min-h-56" : "min-h-[140px] max-h-[calc(100vw*9/16)]",
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-3">
@@ -524,6 +543,24 @@ function ExploreAttentionCard({
         />
         <Metric label={t(dictionary.explore.posts)} value={attention.postCount} />
       </div>
+
+      {attention.sponsor && (
+        <div className="mt-2 flex items-center justify-end gap-1.5">
+          <span className="text-[10px] font-bold text-muted-foreground">
+            {attention.sponsor.tagline || "Sponsored by"}
+          </span>
+          {attention.sponsor.logoUrl ? (
+            <img
+              src={attention.sponsor.logoUrl}
+              alt={attention.sponsor.name}
+              className="size-4 rounded-sm object-contain"
+            />
+          ) : null}
+          <span className="text-[10px] font-black text-foreground">
+            {attention.sponsor.name}
+          </span>
+        </div>
+      )}
     </Link>
   );
 }
@@ -560,7 +597,7 @@ function TranslatedMarketGrid({ markets }: { markets: ExternalMarketCardData[] }
   const { tx } = useTranslate(allTexts);
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 min-[1450px]:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 min-[1750px]:grid-cols-5">
       {markets.map((market) => (
         <ExternalMarketCard key={`${market.platform}-${market.id}`} market={market} tx={tx} />
       ))}
@@ -720,6 +757,7 @@ function mapClusterToExploreAttention(
   liveLabel: LocalizedText,
   awaitingResolutionLabel: LocalizedText,
   daysLeftLabel: LocalizedText,
+  sponsor?: ExploreAttention["sponsor"],
 ): ExploreAttention {
   const sourceNames = Array.from(
     new Set(sources.map((source) => source.source_platform).filter(Boolean)),
@@ -757,6 +795,7 @@ function mapClusterToExploreAttention(
       ? formatEndsIn(closestEndAt, liveLabel, awaitingResolutionLabel, daysLeftLabel)
       : liveLabel,
     ruleStatus: sources.some((source) => Boolean(source.rules_text)) ? "ready" : "draft",
+    sponsor: sponsor ?? null,
   };
 }
 

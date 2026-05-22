@@ -218,6 +218,14 @@ export default function ProfilePage() {
     }));
   }
 
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-[calc(100vh-9rem)] items-center justify-center">
+        <div className="size-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+      </div>
+    );
+  }
+
   if (!userId) {
     return (
       <div className="mx-auto flex min-h-[calc(100vh-9rem)] w-full max-w-lg items-center justify-center p-4">
@@ -561,7 +569,7 @@ export default function ProfilePage() {
           <div className="mt-8 flex flex-wrap items-center gap-4 pt-5 border-t border-border">
             <button
               type="submit"
-              disabled={status === "saving" || status === "loading"}
+              disabled={status === "saving"}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-foreground px-6 text-sm font-black text-background transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <RiSave3Line className="size-5" />
@@ -588,8 +596,8 @@ export default function ProfilePage() {
       {/* Buy MOM Section */}
       <BuyMomSection userId={userId} ownedMom={Number(profile?.mom_energy ?? 0)} />
 
-      {/* Withdraw MOM Section */}
-      <WithdrawMomSection userId={userId} ownedMom={Number(profile?.mom_energy ?? 0)} />
+      {/* Change Password Section */}
+      <ChangePasswordSection />
       </>
       ) : null}
     </div>
@@ -1079,8 +1087,8 @@ function BuyMomSection({
 
   async function handleBuy() {
     if (!userId) return;
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount < 1) return;
+    const finalUsd = inputMode === "usd" ? (parseFloat(amount) || 0) : ((parseFloat(momInput) || 0) * momRate);
+    if (finalUsd < 1) return;
 
     setProcessing(true);
     setNotice(null);
@@ -1090,7 +1098,7 @@ function BuyMomSection({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount_usd: numAmount,
+          amount_usd: finalUsd,
           pay_currency: payCurrency || "",
           user_id: userId,
         }),
@@ -1114,10 +1122,17 @@ function BuyMomSection({
     setProcessing(false);
   }
 
+  const [inputMode, setInputMode] = useState<"usd" | "mom">("usd");
+  const [momInput, setMomInput] = useState("5000");
+
   if (!userId) return null;
 
   const numAmount = parseFloat(amount) || 0;
-  const momEnergy = momRate > 0 ? Math.floor(numAmount / momRate) : 0;
+  const numMomInput = parseFloat(momInput) || 0;
+
+  // Derived values based on which input is active
+  const usdValue = inputMode === "usd" ? numAmount : (numMomInput * momRate);
+  const momValue = inputMode === "usd" ? (momRate > 0 ? numAmount / momRate : 0) : numMomInput;
 
   const statusColors: Record<string, string> = {
     pending: "bg-amber-500/10 text-amber-600",
@@ -1130,6 +1145,16 @@ function BuyMomSection({
     expired: "bg-zinc-500/10 text-zinc-600",
   };
 
+  function handleSwapMode() {
+    if (inputMode === "usd") {
+      setMomInput(momValue.toFixed(2));
+      setInputMode("mom");
+    } else {
+      setAmount(usdValue.toFixed(2));
+      setInputMode("usd");
+    }
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-6">
       <div className="rounded-2xl border border-border bg-background p-6 shadow-sm">
@@ -1141,16 +1166,16 @@ function BuyMomSection({
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <MiniStat
             label={t(p.ownedMom)}
-            value={`${Math.round(ownedMom).toLocaleString()} MOM`}
+            value={`${ownedMom.toLocaleString(undefined, { maximumFractionDigits: 2 })} MOM`}
             accent
           />
           <MiniStat
             label={t(p.expectedVaultShare)}
-            value={`$${(ownedMom * momRate).toFixed(2)}`}
+            value={`≒ $${(ownedMom * momRate).toFixed(2)}`}
           />
           <MiniStat
             label={t(p.buyMomRate)}
-            value={`$${momRate.toFixed(4)}/MOM`}
+            value={`$${momRate.toFixed(4)} / MOM`}
           />
         </div>
 
@@ -1158,21 +1183,50 @@ function BuyMomSection({
           <p className="mt-3 text-sm font-bold text-blue-600">{notice}</p>
         )}
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-3">
+        {/* Converter */}
+        <div className="mt-5 space-y-3">
+          {/* Amount input with inline swap */}
           <div>
-            <label className="mb-1.5 block text-[12px] font-black text-foreground">{t(p.buyMomAmount)}</label>
+            <label className="mb-1.5 block text-[12px] font-black text-foreground">
+              {inputMode === "usd" ? t(p.buyMomAmount) : "MOM Energy"}
+            </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">
+                {inputMode === "usd" ? "$" : "⚡"}
+              </span>
               <input
                 type="number"
-                min="1"
-                step="1"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="h-11 w-full rounded-xl border border-border bg-zinc-50 pl-7 pr-3 text-sm font-bold text-foreground outline-none focus:border-blue-500 dark:bg-zinc-900/50"
+                min="0"
+                step="any"
+                value={inputMode === "usd" ? amount : momInput}
+                onChange={(e) => {
+                  if (inputMode === "usd") setAmount(e.target.value);
+                  else setMomInput(e.target.value);
+                }}
+                className="h-11 w-full rounded-xl border border-border bg-zinc-50 pl-8 pr-20 text-sm font-bold text-foreground outline-none focus:border-blue-500 dark:bg-zinc-900/50"
               />
+              {/* Swap button inside input */}
+              <button
+                type="button"
+                onClick={handleSwapMode}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-bold text-muted-foreground transition-all hover:border-blue-500 hover:text-blue-600 active:scale-95"
+                title="Switch input mode"
+              >
+                <span>⇄</span>
+                <span>{inputMode === "usd" ? "MOM" : "USD"}</span>
+              </button>
             </div>
+            {/* Converted value */}
+            <p className="mt-1.5 text-[12px] font-bold text-muted-foreground">
+              {inputMode === "usd" ? (
+                <>= {momValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} MOM</>
+              ) : (
+                <>= ${usdValue.toFixed(2)} USD</>
+              )}
+            </p>
           </div>
+
+          {/* Payment method */}
           <div>
             <label className="mb-1.5 block text-[12px] font-black text-foreground">{t(p.buyMomPayWith)}</label>
             <select
@@ -1186,23 +1240,15 @@ function BuyMomSection({
               ))}
             </select>
           </div>
-          <div>
-            <label className="mb-1.5 block text-[12px] font-black text-foreground">{t(p.buyMomRate)}</label>
-            <div className="flex h-11 items-center rounded-xl border border-border bg-zinc-50 px-3 dark:bg-zinc-900/50">
-              <span className="text-sm font-black tabular-nums text-foreground">
-                {momEnergy.toLocaleString()} MOM
-              </span>
-            </div>
-          </div>
         </div>
 
         <button
           type="button"
-          disabled={processing || numAmount < 1}
+          disabled={processing || usdValue < 1}
           onClick={handleBuy}
           className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-foreground px-6 text-sm font-black text-background transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {processing ? t(p.buyMomProcessing) : `${t(p.buyMom)} · ${momEnergy.toLocaleString()} MOM`}
+          {processing ? t(p.buyMomProcessing) : `${t(p.buyMom)} · ${momValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} MOM`}
         </button>
 
         {/* Payment History */}
@@ -1260,269 +1306,103 @@ function MiniStat({
   );
 }
 
-// ─── Withdraw MOM Section ────────────────────────────
-
-type WithdrawalRow = {
-  id: string;
-  mom_amount: number;
-  rate_at_request: number;
-  usd_amount: number;
-  spread: number;
-  status: string;
-  created_at: string;
-};
-
-function WithdrawMomSection({
-  userId,
-  ownedMom,
-}: {
-  userId: string | null;
-  ownedMom: number;
-}) {
+function ChangePasswordSection() {
   const { dictionary, t } = useI18n();
-  const p = dictionary.profile;
-  const [amount, setAmount] = useState("1000");
-  const [walletId, setWalletId] = useState("");
-  const [wallets, setWallets] = useState<WalletRow[]>([]);
-  const [processing, setProcessing] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [withdrawals, setWithdrawals] = useState<WithdrawalRow[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [momRate, setMomRate] = useState<number>(0.001);
-  const [tierData, setTierData] = useState<{ rank: number; spread: number; name: string } | null>(null);
+  const a = dictionary.auth;
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [msg, setMsg] = useState("");
 
-  // Fetch dynamic rate & user data
-  useEffect(() => {
-    if (!userId) return;
-    const supabase = createClient();
-    
-    fetch("/api/rate")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.rate) setMomRate(Number(data.rate));
-      })
-      .catch(() => {});
+  const rules = [
+    { ok: newPw.length >= 8, label: t(a.pwRuleMinLength) },
+    { ok: /[a-zA-Z]/.test(newPw), label: t(a.pwRuleLetter) },
+    { ok: /\d/.test(newPw), label: t(a.pwRuleNumber) },
+  ];
+  const allOk = rules.every((r) => r.ok) && newPw === confirmPw && newPw.length > 0;
 
-    supabase
-      .from("wallets")
-      .select("id, address, label, is_primary")
-      .eq("user_id", userId)
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          setWallets(data as WalletRow[]);
-          const primary = data.find((w: any) => w.is_primary) || data[0];
-          setWalletId(primary.id);
-        }
-      });
-
-    (supabase as any)
-      .from("platform_contributor_rankings")
-      .select("percent_rank")
-      .eq("user_id", userId)
-      .maybeSingle()
-      .then(({ data }: any) => {
-        if (data) {
-          const pr = data.percent_rank;
-          if (pr <= 0.05) setTierData({ rank: pr, spread: 0.03, name: "Gold" });
-          else if (pr <= 0.20) setTierData({ rank: pr, spread: 0.04, name: "Silver" });
-          else setTierData({ rank: pr, spread: 0.05, name: "Member" });
-        } else {
-          setTierData({ rank: 1, spread: 0.05, name: "Member" });
-        }
-      });
-
-    loadWithdrawals();
-  }, [userId]);
-
-  function loadWithdrawals() {
-    if (!userId) return;
-    const supabase = createClient();
-    (supabase as any)
-      .from("withdrawal_requests")
-      .select("id, mom_amount, rate_at_request, usd_amount, spread, status, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(10)
-      .then(({ data }: any) => {
-        if (data) setWithdrawals(data as WithdrawalRow[]);
-      });
-  }
-
-  async function handleWithdraw() {
-    if (!userId) return;
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount < 1000) return;
-    if (!walletId) {
-      setNotice(t(p.withdrawNoWallets));
-      return;
-    }
-
-    setProcessing(true);
-    setNotice(null);
+  async function handleChange() {
+    if (!allOk) return;
+    setStatus("saving");
+    setMsg("");
 
     const supabase = createClient();
-    const { data, error } = await supabase.rpc("request_withdrawal", {
-      p_mom_amount: numAmount,
-      p_wallet_id: walletId,
-    });
+    const { error } = await supabase.auth.updateUser({ password: newPw });
 
     if (error) {
-      if (error.message.includes("insufficient")) setNotice(t(p.withdrawInsufficient));
-      else if (error.message.includes("limit")) setNotice(t(p.withdrawLimitExceeded));
-      else setNotice(error.message);
+      setStatus("error");
+      setMsg(t(a.passwordChangeFailed));
     } else {
-      setNotice(t(p.withdrawSuccess));
-      setAmount("1000");
-      loadWithdrawals();
-    }
-    setProcessing(false);
-  }
-
-  async function handleCancel(id: string) {
-    if (!userId) return;
-    const supabase = createClient();
-    const { error } = await supabase.rpc("cancel_withdrawal", { p_withdrawal_id: id });
-    if (!error) {
-      loadWithdrawals();
+      setStatus("done");
+      setMsg(t(a.passwordChanged));
+      setNewPw("");
+      setConfirmPw("");
+      setTimeout(() => { setStatus("idle"); setMsg(""); }, 3000);
     }
   }
-
-  if (!userId) return null;
-
-  const numAmount = parseFloat(amount) || 0;
-  const spread = tierData?.spread ?? 0.05;
-  const expectedUsdc = numAmount * momRate * (1 - spread);
-
-  const statusColors: Record<string, string> = {
-    queued: "bg-amber-500/10 text-amber-600",
-    processing: "bg-blue-500/10 text-blue-600",
-    completed: "bg-emerald-500/10 text-emerald-600",
-    failed: "bg-rose-500/10 text-rose-600",
-    cancelled: "bg-zinc-500/10 text-zinc-600",
-  };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-6 pb-20">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-6">
       <div className="rounded-2xl border border-border bg-background p-6 shadow-sm">
-        <h2 className="text-lg font-black text-foreground">{t(p.withdrawMom)}</h2>
-        <p className="mt-1 text-sm font-medium leading-6 text-muted-foreground">
-          {t(p.withdrawMomDesc)}
-        </p>
+        <h2 className="text-lg font-black text-foreground">{t(a.changePassword)}</h2>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <MiniStat
-            label={t(p.withdrawTier)}
-            value={tierData?.name ?? "Member"}
-            accent
-          />
-          <MiniStat
-            label={t(p.withdrawSpread)}
-            value={`${(spread * 100).toFixed(0)}%`}
-          />
-          <MiniStat
-            label={t(p.buyMomRate)}
-            value={`$${momRate.toFixed(4)}/MOM`}
-          />
-        </div>
-
-        {notice && (
-          <p className="mt-3 text-sm font-bold text-blue-600">{notice}</p>
-        )}
-
-        <div className="mt-5 grid gap-4 sm:grid-cols-3">
+        <div className="mt-4 space-y-3">
           <div>
-            <label className="mb-1.5 block text-[12px] font-black text-foreground">{t(p.withdrawAmount)}</label>
-            <div className="relative">
-              <input
-                type="number"
-                min="1000"
-                step="100"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="h-11 w-full rounded-xl border border-border bg-zinc-50 px-3 text-sm font-bold text-foreground outline-none focus:border-blue-500 dark:bg-zinc-900/50"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">MOM</span>
-            </div>
-            <p className="mt-1.5 text-[10px] font-medium text-muted-foreground">{t(p.withdrawMinAmount)}</p>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[12px] font-black text-foreground">{t(p.withdrawSelectWallet)}</label>
-            <select
-              value={walletId}
-              onChange={(e) => setWalletId(e.target.value)}
-              className="h-11 w-full rounded-xl border border-border bg-zinc-50 px-3 text-sm font-bold text-foreground outline-none appearance-none focus:border-blue-500 dark:bg-zinc-900/50"
-            >
-              {wallets.length === 0 ? (
-                <option value="">{t(p.withdrawNoWallets)}</option>
-              ) : (
-                wallets.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.label ? `${w.label} - ` : ""}{w.address.slice(0,6)}...{w.address.slice(-4)}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[12px] font-black text-foreground">{t(p.withdrawUsdcExpected)}</label>
-            <div className="flex h-11 items-center rounded-xl border border-blue-500/25 bg-blue-50/50 px-3 dark:bg-blue-500/10">
-              <span className="text-sm font-black tabular-nums text-blue-700 dark:text-blue-300">
-                ${Math.max(0, expectedUsdc).toFixed(2)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          disabled={processing || numAmount < 1000 || !walletId}
-          onClick={handleWithdraw}
-          className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-foreground px-6 text-sm font-black text-background transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {processing ? t(p.withdrawProcessing) : t(p.withdrawSubmitBtn)}
-        </button>
-
-        {/* Withdrawal History */}
-        {withdrawals.length > 0 && (
-          <div className="mt-6 border-t border-border pt-4">
-            <button
-              type="button"
-              onClick={() => setShowHistory((v) => !v)}
-              className="text-sm font-black text-foreground hover:text-blue-600 transition-colors"
-            >
-              {t(p.withdrawHistory)} ({withdrawals.length})
-            </button>
-            {showHistory && (
-              <div className="mt-3 space-y-2">
-                {withdrawals.map((req) => (
-                  <div key={req.id} className="flex items-center justify-between rounded-xl border border-border bg-zinc-50 p-3 dark:bg-zinc-900/50">
-                    <div>
-                      <p className="text-sm font-bold text-foreground">
-                        {req.mom_amount.toLocaleString()} MOM → ${req.usd_amount}
-                      </p>
-                      <p className="text-[10px] font-medium text-muted-foreground">
-                        Rate: ${req.rate_at_request} · Spread: {req.spread * 100}% · {new Date(req.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${statusColors[req.status] ?? "bg-zinc-500/10 text-zinc-600"}`}>
-                        {req.status === 'queued' ? t(p.withdrawQueue) : req.status === 'processing' ? t(p.withdrawProcessing) : req.status === 'completed' ? t(p.withdrawCompleted) : req.status === 'cancelled' ? t(p.withdrawCancelled) : t(p.withdrawFailed)}
-                      </span>
-                      {req.status === 'queued' && (
-                        <button
-                          onClick={() => handleCancel(req.id)}
-                          className="text-[10px] font-bold text-red-500 hover:underline"
-                        >
-                          {t(p.withdrawCancelBtn)}
-                        </button>
-                      )}
-                    </div>
-                  </div>
+            <label className="mb-1.5 block text-[12px] font-black text-foreground">{t(a.newPassword)}</label>
+            <input
+              type="password"
+              value={newPw}
+              onChange={(e) => { setNewPw(e.target.value); setMsg(""); }}
+              placeholder="••••••••"
+              className="h-11 w-full rounded-xl border border-border bg-zinc-50 px-4 text-sm font-bold text-foreground outline-none focus:border-blue-500 dark:bg-zinc-900/50"
+            />
+            {newPw.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {rules.map((r) => (
+                  <span
+                    key={r.label}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                      r.ok
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : "bg-zinc-100 text-muted-foreground dark:bg-zinc-800"
+                    }`}
+                  >
+                    {r.ok ? "✓" : "○"} {r.label}
+                  </span>
                 ))}
               </div>
             )}
           </div>
+
+          <div>
+            <label className="mb-1.5 block text-[12px] font-black text-foreground">{t(a.confirmNewPassword)}</label>
+            <input
+              type="password"
+              value={confirmPw}
+              onChange={(e) => { setConfirmPw(e.target.value); setMsg(""); }}
+              placeholder="••••••••"
+              className="h-11 w-full rounded-xl border border-border bg-zinc-50 px-4 text-sm font-bold text-foreground outline-none focus:border-blue-500 dark:bg-zinc-900/50"
+            />
+            {confirmPw.length > 0 && newPw !== confirmPw && (
+              <p className="mt-1.5 text-[11px] font-bold text-rose-500">{t(a.passwordMismatch)}</p>
+            )}
+          </div>
+        </div>
+
+        {msg && (
+          <p className={`mt-3 text-sm font-bold ${status === "done" ? "text-emerald-600" : "text-rose-600"}`}>
+            {msg}
+          </p>
         )}
+
+        <button
+          type="button"
+          disabled={!allOk || status === "saving"}
+          onClick={handleChange}
+          className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-foreground px-6 text-sm font-black text-background transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {status === "saving" ? "..." : t(a.changePassword)}
+        </button>
       </div>
     </div>
   );

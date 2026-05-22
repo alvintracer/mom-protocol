@@ -13,8 +13,10 @@ type Props = {
 
 /**
  * AuthGuard — Renders children only when the user is authenticated.
- * Shows a login prompt otherwise. Used for pages that require auth
- * (notifications, bookmarks, messages, etc.)
+ * Shows a loading spinner while checking, login prompt if not signed in.
+ *
+ * Uses getUser() (reliable network call) with loading guard to prevent
+ * any flash of unauthenticated content.
  */
 export function AuthGuard({ children }: Props) {
   const { dictionary, t } = useI18n();
@@ -25,20 +27,20 @@ export function AuthGuard({ children }: Props) {
     let mounted = true;
     const supabase = createClient();
 
-    async function check() {
-      const { data } = await supabase.auth.getUser();
+    // getUser() — reliable network check.
+    // Spinner stays visible until this resolves.
+    supabase.auth.getUser().then(({ data }) => {
       if (mounted) {
         setUserId(data.user?.id ?? null);
         setLoading(false);
       }
-    }
+    });
 
-    check();
-
+    // Listen for subsequent auth changes (sign in/out after initial load).
+    // Does NOT touch loading — only getUser() clears it.
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setUserId(session?.user?.id ?? null);
-        setLoading(false);
       }
     });
 
@@ -50,8 +52,8 @@ export function AuthGuard({ children }: Props) {
 
   if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center py-20">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+      <div className="flex min-h-[calc(100vh-9rem)] items-center justify-center">
+        <div className="size-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
       </div>
     );
   }

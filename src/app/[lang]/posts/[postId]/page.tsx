@@ -125,6 +125,7 @@ export default function PostDetailPage({
         premium_unlock_count: (postJson.premium_unlock_count as number) ?? 0,
         premium_total_earned: (postJson.premium_total_earned as number) ?? 0,
         content_format: (postJson.content_format as string) ?? "plain",
+        is_pinned: (postJson.is_pinned as boolean) ?? false,
         created_at: postJson.created_at as string,
         updated_at: postJson.updated_at as string,
       };

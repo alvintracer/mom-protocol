@@ -44,6 +44,7 @@ type Step =
   | "login_otp"
   | "signup_otp"
   | "otp_verify"
+  | "forgot_password"
   | "done";
 
 export default function LoginPage() {
@@ -56,6 +57,7 @@ export default function LoginPage() {
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [step, setStep] = useState<Step>("email");
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   const isOtpStep =
     step === "login_otp" || step === "signup_otp" || step === "otp_verify";
@@ -81,6 +83,7 @@ export default function LoginPage() {
     setPassword("");
     setCode("");
     setErrorMsg("");
+    setSuccessMsg("");
     setSecondsLeft(0);
     setResendSecondsLeft(0);
   }
@@ -120,6 +123,34 @@ export default function LoginPage() {
     setErrorMsg("");
 
     const supabase = createClient();
+
+    // For signup, check if user already exists
+    if (mode === "signup_otp") {
+      const { data: otpData, error: otpError } = await supabase.auth.signInWithOtp({
+        email,
+        options: { shouldCreateUser: false },
+      });
+      // If no error, user exists (OTP was sent to existing user)
+      // We check: if we can send OTP without creating user, user exists
+      if (!otpError) {
+        // Sign out any accidental session
+        await supabase.auth.signOut();
+        setIsSendingCode(false);
+        setErrorMsg(t(dictionary.auth.alreadyRegistered));
+        return;
+      }
+      // If error contains "user not found" or similar, user doesn't exist → proceed
+      // Otherwise it might be a rate limit or other error
+      if (
+        otpError.message?.includes("rate limit") ||
+        (otpError as { code?: string }).code === "over_email_send_rate_limit"
+      ) {
+        setIsSendingCode(false);
+        setErrorMsg(t(dictionary.auth.rateLimitError));
+        return;
+      }
+    }
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -405,6 +436,56 @@ export default function LoginPage() {
               <RiMailLine className="size-5" />
               {t(dictionary.auth.emailCodeSignIn)}
             </button>
+
+            <button
+              type="button"
+              onClick={() => setStep("forgot_password")}
+              className="mt-1 w-full text-center text-[13px] font-bold text-muted-foreground hover:text-blue-500 transition-colors"
+            >
+              {t(dictionary.auth.forgotPassword)}
+            </button>
+          </div>
+        ) : null}
+
+        {/* ──────────────── Forgot Password ──────────────── */}
+        {step === "forgot_password" ? (
+          <div className="mt-8 space-y-4">
+            <h2 className="text-lg font-black text-foreground">
+              {t(dictionary.auth.resetPasswordTitle)}
+            </h2>
+            <p className="text-[13px] font-medium text-muted-foreground">
+              {t(dictionary.auth.resetPasswordDesc)}
+            </p>
+
+            <div className="flex items-center gap-2 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 px-4 py-3 border border-border">
+              <RiMailLine className="size-4 text-muted-foreground" />
+              <span className="flex-1 truncate text-sm font-bold text-foreground">
+                {email}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              disabled={isSendingCode}
+              onClick={async () => {
+                setIsSendingCode(true);
+                setErrorMsg("");
+                const supabase = createClient();
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                  redirectTo: `${window.location.origin}/auth/set-password`,
+                });
+                setIsSendingCode(false);
+                if (error) {
+                  setErrorMsg(t(dictionary.auth.error));
+                } else {
+                  setSuccessMsg(t(dictionary.auth.resetLinkSent));
+                }
+              }}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 font-bold text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+            >
+              <RiMailLine className="size-5" />
+              {t(dictionary.auth.sendResetLink)}
+            </button>
           </div>
         ) : null}
 
@@ -493,10 +574,15 @@ export default function LoginPage() {
           </div>
         ) : null}
 
-        {/* ──────────────── Error message ──────────────── */}
+        {/* ──────────────── Messages ──────────────── */}
         {errorMsg ? (
           <p className="mt-4 rounded-xl bg-red-50 dark:bg-red-500/10 p-4 text-[13px] font-semibold text-red-700 dark:text-red-400">
             {errorMsg}
+          </p>
+        ) : null}
+        {successMsg ? (
+          <p className="mt-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 p-4 text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
+            {successMsg}
           </p>
         ) : null}
 
