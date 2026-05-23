@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { RiInformationLine, RiPulseLine, RiTrophyLine, RiMedalFill, RiUserFollowLine } from "react-icons/ri";
+import {
+  RiInformationLine, RiPulseLine, RiTrophyLine, RiMedalFill,
+  RiUserFollowLine, RiShieldCheckLine, RiExternalLinkLine,
+  RiPieChartLine, RiFlagLine, RiLockLine, RiLockUnlockLine,
+} from "react-icons/ri";
 
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
@@ -10,6 +14,10 @@ import { RateHistoryChart } from "@/shared/components/cards/RateHistoryChart";
 
 type PlatformVaultOverview = {
   vault_usd: number;
+  distributable_usd: number;
+  operations_usd: number;
+  distribution_pct: number;
+  operations_pct: number;
   total_mom_supply: number;
   current_rate: number;
 };
@@ -32,6 +40,17 @@ type ContributorRanking = {
   rank: number;
 };
 
+type MilestoneTier = {
+  tier_name: string;
+  tier_emoji: string;
+  vault_threshold_usd: number;
+  max_withdrawal_pct: number;
+  max_monthly_usd: number;
+  min_withdrawal_usd: number;
+  is_fully_open: boolean;
+  sort_order: number;
+};
+
 export default function RewardsPage() {
   const { dictionary, t } = useI18n();
   const m = dictionary.vault;
@@ -39,6 +58,7 @@ export default function RewardsPage() {
   const [overview, setOverview] = useState<PlatformVaultOverview | null>(null);
   const [history, setHistory] = useState<RateHistory[]>([]);
   const [rankings, setRankings] = useState<ContributorRanking[]>([]);
+  const [milestones, setMilestones] = useState<MilestoneTier[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,10 +66,11 @@ export default function RewardsPage() {
     const supabase = createClient();
 
     async function loadData() {
-      const [overviewRes, historyRes, rankingsRes] = await Promise.all([
-        supabase.from("platform_vault_overview").select("vault_usd, total_mom_supply, current_rate").maybeSingle(),
+      const [overviewRes, historyRes, rankingsRes, milestonesRes] = await Promise.all([
+        supabase.from("platform_vault_overview").select("vault_usd, distributable_usd, operations_usd, distribution_pct, operations_pct, total_mom_supply, current_rate").maybeSingle(),
         (supabase as any).from("platform_rate_history").select("*").order("snapshot_date", { ascending: true }),
         (supabase as any).from("platform_contributor_rankings").select("*").order("rank", { ascending: true }).limit(100),
+        (supabase as any).from("vault_milestones").select("*").order("sort_order", { ascending: true }),
       ]);
 
       if (!mounted) return;
@@ -57,6 +78,7 @@ export default function RewardsPage() {
       const ov = overviewRes.data as PlatformVaultOverview | null;
       setOverview(ov);
       setRankings(rankingsRes.data as ContributorRanking[] | null ?? []);
+      setMilestones(milestonesRes.data as MilestoneTier[] | null ?? []);
 
       const historicalData = (historyRes.data as RateHistory[] | null) ?? [];
 
@@ -95,19 +117,92 @@ export default function RewardsPage() {
         {/* Top Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <VaultStat 
-            label={t(dictionary.topBar.vault ?? { ko: "볼트", en: "Vault", es: "Bóveda" })} 
+            label={t(m.totalVault)} 
             value={overview ? `$${formatNumber(overview.vault_usd)}` : "—"} 
             highlight 
           />
           <VaultStat 
-            label={t(dictionary.topBar.totalSupply ?? { ko: "유통 에너지", en: "Total Supply", es: "Suministro Total" })} 
-            value={overview ? `${formatNumber(overview.total_mom_supply)} MOM` : "—"} 
+            label={t(m.distributableUsd)} 
+            value={overview ? `$${formatNumber(overview.distributable_usd)}` : "—"} 
           />
           <VaultStat 
             label={t(dictionary.topBar.rate ?? { ko: "환율", en: "Rate", es: "Tasa" })} 
             value={overview ? `$${overview.current_rate.toFixed(4)}` : "—"} 
           />
         </div>
+
+        {/* Vault Allocation Pie Chart + On-chain Info */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Pie Chart */}
+          <div className="rounded-3xl border border-border bg-background p-5 sm:p-7 shadow-sm">
+            <div className="mb-5 flex items-center gap-2">
+              <RiPieChartLine className="size-5 text-emerald-500" />
+              <h2 className="text-lg font-black text-foreground">
+                {t(m.vaultAllocation)}
+              </h2>
+            </div>
+            {loading ? (
+              <div className="h-48 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" />
+            ) : (
+              <VaultPieChart
+                distributionPct={overview?.distribution_pct ?? 90}
+                operationsPct={overview?.operations_pct ?? 10}
+                distributableUsd={overview?.distributable_usd ?? 0}
+                operationsUsd={overview?.operations_usd ?? 0}
+                totalUsd={overview?.vault_usd ?? 0}
+                distributionLabel={t(m.distributionLabel)}
+                operationsLabel={t(m.operationsLabel)}
+              />
+            )}
+          </div>
+
+          {/* On-chain Info */}
+          <div className="rounded-3xl border border-border bg-background p-5 sm:p-7 shadow-sm">
+            <div className="mb-5 flex items-center gap-2">
+              <RiShieldCheckLine className="size-5 text-indigo-500" />
+              <h2 className="text-lg font-black text-foreground">
+                {t(m.onchainVault)}
+              </h2>
+            </div>
+            <div className="space-y-4">
+              <OnChainRow
+                label="Network"
+                value="Giwa Sepolia (Testnet)"
+              />
+              <OnChainRow
+                label={t(m.contractAddress)}
+                value={process.env.NEXT_PUBLIC_MOCK_USDC_ADDRESS || "Deploying..."}
+                isMono
+                href={process.env.NEXT_PUBLIC_MOCK_USDC_ADDRESS ? `https://sepolia-explorer.giwa.io/address/${process.env.NEXT_PUBLIC_MOCK_USDC_ADDRESS}` : undefined}
+              />
+              <OnChainRow
+                label="Token"
+                value="mUSDC (momment. Mock USDC)"
+              />
+              <OnChainRow
+                label={t(m.masterWallet)}
+                value="0xFe86...0387"
+                isMono
+                href="https://sepolia-explorer.giwa.io/address/0xFe86A4f256eB3b2C303Fc2e8C9bC81f025B80387"
+              />
+              <OnChainRow
+                label={t(m.totalVault)}
+                value={overview ? `$${formatNumber(overview.vault_usd)} mUSDC` : "—"}
+              />
+            </div>
+            <p className="mt-5 text-[11px] text-muted-foreground/70 leading-relaxed">
+              {t(m.testnetNotice)}
+            </p>
+          </div>
+        </div>
+
+        {/* Milestone Progress */}
+        {milestones.length > 0 && (
+          <MilestoneProgress
+            milestones={milestones}
+            vaultUsd={overview?.vault_usd ?? 0}
+          />
+        )}
 
         {/* Rate History Chart */}
         <div className="rounded-3xl border border-border bg-background p-5 sm:p-7 shadow-sm">
@@ -328,4 +423,270 @@ function fillDateGaps(data: RateHistory[]): RateHistory[] {
   }
 
   return result;
+}
+
+/**
+ * CSS-only donut pie chart showing 90/10 vault allocation.
+ */
+function VaultPieChart({
+  distributionPct,
+  operationsPct,
+  distributableUsd,
+  operationsUsd,
+  totalUsd,
+  distributionLabel,
+  operationsLabel,
+}: {
+  distributionPct: number;
+  operationsPct: number;
+  distributableUsd: number;
+  operationsUsd: number;
+  totalUsd: number;
+  distributionLabel: string;
+  operationsLabel: string;
+}) {
+  // conic-gradient for the donut
+  const gradient = `conic-gradient(
+    #3b82f6 0deg ${distributionPct * 3.6}deg,
+    #71717a ${distributionPct * 3.6}deg 360deg
+  )`;
+
+  return (
+    <div className="flex flex-col items-center gap-5">
+      {/* Donut */}
+      <div className="relative size-44 sm:size-48">
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{ background: gradient }}
+        />
+        {/* Inner cutout */}
+        <div className="absolute inset-5 rounded-full bg-background flex flex-col items-center justify-center">
+          <span className="text-[11px] font-bold text-muted-foreground">Total</span>
+          <span className="text-xl sm:text-2xl font-black tabular-nums text-foreground">
+            ${formatNumber(totalUsd)}
+          </span>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-6 text-[13px]">
+        <div className="flex items-center gap-2">
+          <div className="size-3 rounded-sm bg-blue-500" />
+          <div>
+            <p className="font-bold text-foreground">{distributionLabel}</p>
+            <p className="text-muted-foreground tabular-nums">${formatNumber(distributableUsd)}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="size-3 rounded-sm bg-zinc-500" />
+          <div>
+            <p className="font-bold text-foreground">{operationsLabel}</p>
+            <p className="text-muted-foreground tabular-nums">${formatNumber(operationsUsd)}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OnChainRow({
+  label,
+  value,
+  isMono,
+  href,
+}: {
+  label: string;
+  value: string;
+  isMono?: boolean;
+  href?: string;
+}) {
+  const content = (
+    <span
+      className={`text-[13px] font-bold truncate text-right ${
+        isMono ? "font-mono text-[12px]" : ""
+      } ${
+        href ? "text-blue-600 dark:text-blue-400" : "text-foreground"
+      }`}
+    >
+      {value}
+      {href && <RiExternalLinkLine className="inline ml-1 size-3 opacity-60" />}
+    </span>
+  );
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[12px] font-bold text-muted-foreground shrink-0">{label}</span>
+      {href ? (
+        <a href={href} target="_blank" rel="noopener noreferrer" className="truncate hover:opacity-80 transition-opacity">
+          {content}
+        </a>
+      ) : (
+        content
+      )}
+    </div>
+  );
+}
+
+/**
+ * Milestone progress section: progress bar + tier cards (i18n, no emoji)
+ */
+function MilestoneProgress({
+  milestones,
+  vaultUsd,
+}: {
+  milestones: MilestoneTier[];
+  vaultUsd: number;
+}) {
+  const { dictionary, t } = useI18n();
+  const m = dictionary.vault;
+
+  // Tier name lookup from i18n
+  const tierLabel = (name: string) => {
+    const key = name as keyof typeof m.tierNames;
+    return m.tierNames[key] ? t(m.tierNames[key]) : name;
+  };
+
+  // Find current tier
+  const currentTier = milestones
+    .filter((ms) => ms.vault_threshold_usd <= vaultUsd)
+    .sort((a, b) => b.vault_threshold_usd - a.vault_threshold_usd)[0];
+
+  const nextTier = milestones.find(
+    (ms) => ms.vault_threshold_usd > vaultUsd,
+  );
+
+  // Progress towards next tier
+  const progressPct = nextTier
+    ? Math.min(
+        ((vaultUsd - (currentTier?.vault_threshold_usd ?? 0)) /
+          (nextTier.vault_threshold_usd - (currentTier?.vault_threshold_usd ?? 0))) *
+          100,
+        100,
+      )
+    : 100;
+
+  // Skip "locked" tier row
+  const visibleTiers = milestones.filter((ms) => ms.sort_order > 0);
+
+  return (
+    <div className="rounded-3xl border border-border bg-background p-5 sm:p-7 shadow-sm">
+      <div className="mb-1 flex items-center gap-2">
+        <RiFlagLine className="size-5 text-amber-500" />
+        <h2 className="text-lg font-black text-foreground">
+          {t(m.milestones)}
+        </h2>
+      </div>
+      <p className="mb-5 text-[12px] font-medium text-muted-foreground">
+        {t(m.milestonesDesc)}
+      </p>
+
+      {/* Current status */}
+      <div className="mb-6 rounded-2xl border border-border bg-zinc-50/50 dark:bg-zinc-900/30 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-[11px] font-bold text-muted-foreground">
+              {t(m.currentTier)}
+            </p>
+            <p className="text-[15px] font-black text-foreground">
+              {tierLabel(currentTier?.tier_name ?? "locked")}
+            </p>
+            <p className="text-[11px] font-medium text-muted-foreground">
+              {currentTier && currentTier.max_withdrawal_pct > 0
+                ? `${currentTier.max_withdrawal_pct}% ${t(m.withdrawable)}`
+                : t(m.withdrawalsLocked)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[18px] font-black tabular-nums text-foreground">
+              ${formatCompactUsd(vaultUsd)}
+            </p>
+            {nextTier && (
+              <p className="text-[11px] font-medium text-muted-foreground">
+                → ${formatCompactUsd(nextTier.vault_threshold_usd)}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        {nextTier && (
+          <div className="relative h-2.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-700"
+              style={{ width: `${Math.max(progressPct, 2)}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Tier timeline */}
+      <div className="space-y-2">
+        {visibleTiers.map((tier) => {
+          const isActive = currentTier?.tier_name === tier.tier_name;
+          const isReached = tier.vault_threshold_usd <= vaultUsd;
+
+          return (
+            <div
+              key={tier.tier_name}
+              className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
+                isActive
+                  ? "border-blue-500/30 bg-blue-500/5"
+                  : isReached
+                    ? "border-emerald-400/20 bg-emerald-500/5"
+                    : "border-border bg-background opacity-50"
+              }`}
+            >
+              {/* Lock icon */}
+              <div className="shrink-0">
+                {isReached ? (
+                  <RiLockUnlockLine className="size-4 text-emerald-500" />
+                ) : (
+                  <RiLockLine className="size-4 text-muted-foreground" />
+                )}
+              </div>
+
+              {/* Tier name (localized, no emoji) */}
+              <div className="min-w-0 flex-1">
+                <p className={`text-[12px] font-black ${
+                  isActive ? "text-blue-600 dark:text-blue-400" : "text-foreground"
+                }`}>
+                  {tierLabel(tier.tier_name)}
+                </p>
+              </div>
+
+              {/* Threshold */}
+              <span className="text-[11px] font-bold tabular-nums text-muted-foreground shrink-0">
+                ${formatCompactUsd(tier.vault_threshold_usd)}
+              </span>
+
+              {/* Withdrawal info */}
+              <div className="text-right shrink-0 w-16">
+                <p className="text-[11px] font-black tabular-nums text-foreground">
+                  {tier.is_fully_open ? "100%" : `${tier.max_withdrawal_pct}%`}
+                </p>
+                <p className="text-[9px] font-medium text-muted-foreground">
+                  {tier.is_fully_open
+                    ? t(m.noCap)
+                    : tier.max_monthly_usd > 0
+                      ? `≤$${formatCompactUsd(tier.max_monthly_usd)}${t(m.perMonth)}`
+                      : ""}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Bottom notice */}
+      <p className="mt-4 text-[11px] text-muted-foreground/70 leading-relaxed">
+        {t(m.milestoneNotice)}
+      </p>
+    </div>
+  );
+}
+
+function formatCompactUsd(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return n.toLocaleString();
 }

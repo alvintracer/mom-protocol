@@ -18,8 +18,6 @@ import { useI18n } from "@/shared/i18n/LanguageProvider";
 
 type AssertionStatus =
   | "draft"
-  | "builder_verification_window"
-  | "open_verification_window"
   | "submitted"
   | "evidence_captured"
   | "llm_verified"
@@ -59,8 +57,7 @@ type EvidenceItem = {
 // ─── 1. Status Pipeline ───────────────────────────
 
 const PIPELINE_STEPS: AssertionStatus[] = [
-  "builder_verification_window",
-  "open_verification_window",
+  "submitted",
   "evidence_captured",
   "llm_verified",
   "finalized",
@@ -71,21 +68,20 @@ export function AioStatusPipeline({ status }: { status: AssertionStatus }) {
   const s = dictionary.aio.status;
 
   const statusLabels: Record<string, string> = {
-    builder_verification_window: t(s.builderVerification),
-    open_verification_window: t(s.openVerification),
     submitted: t(s.submitted),
     evidence_captured: t(s.evidenceCaptured),
     llm_verified: t(s.llmVerified),
     finalized: t(s.finalized),
   };
 
+  // Map legacy statuses to pipeline positions
   const displayStatus =
-    status === "submitted"
-      ? "evidence_captured"
-      : status === "rejected" || status === "cancelled"
-        ? "llm_verified"
+    status === "rejected" || status === "cancelled"
+      ? "llm_verified"
+      : (["challenge_period", "challenged", "builder_verification_window", "open_verification_window"] as string[]).includes(status)
+        ? "submitted"
         : status;
-  const currentIdx = PIPELINE_STEPS.indexOf(displayStatus);
+  const currentIdx = PIPELINE_STEPS.indexOf(displayStatus as AssertionStatus);
   const isRejected = status === "rejected";
 
   return (
@@ -285,7 +281,7 @@ export function AioRuleSummary({
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <RuleStat icon={<RiTimerLine className="size-3.5" />} label={t(r.challengeWindow)} value={`${challengeHours}${t(r.hours)}`} />
+        <RuleStat icon={<RiTimerLine className="size-3.5" />} label={t(r.verificationWindow)} value={`${challengeHours}${t(r.hours)}`} />
         <RuleStat icon={<RiShieldCheckLine className="size-3.5" />} label={t(r.minEvidence)} value={String(rule.min_evidence_count)} />
         <RuleStat icon={<RiFlashlightLine className="size-3.5" />} label={t(r.bondAmount)} value={`${rule.bond_amount} MOM`} />
         <div className="rounded-lg border border-border px-2.5 py-2">

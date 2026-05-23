@@ -11,9 +11,21 @@ import { TopBar } from "@/shared/components/layout/TopBar";
 /** Pages that should use full-width center column (no max-w constraint) */
 const FULL_WIDTH_PATHS = ["/explore", "/search", "/markets"];
 
+/** Pages that bypass AppShell entirely (they provide their own shell) */
+const BYPASS_SHELL_PATHS = ["/terminal"];
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const stripped = pathname.replace(/^\/(ko|en|es)/, "") || "/";
+
+  /* Terminal mode: skip the entire shell */
+  const isBypassed = BYPASS_SHELL_PATHS.some(
+    (p) => stripped === p || stripped.startsWith(p + "/"),
+  );
+  if (isBypassed) {
+    return <>{children}</>;
+  }
+
   const isFullWidth = FULL_WIDTH_PATHS.some((p) => stripped === p || stripped.startsWith(p + "/"));
 
   return (

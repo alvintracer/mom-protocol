@@ -158,9 +158,10 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
                 }}
                 className="mt-2 w-full max-w-[746px] cursor-pointer rounded-xl border border-border bg-zinc-50/50 p-3.5 transition-colors hover:border-blue-300 dark:bg-zinc-900/30 dark:hover:border-blue-500/40"
               >
-                <p className="text-[11px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                  {t(dictionary.home.linkedAttention)}
-                </p>
+                <div className="flex items-center gap-2 text-[12px] font-bold text-blue-600 dark:text-blue-400">
+                  <RiLinksLine className="size-4" />
+                  a/{linkedEvent.slug || linkedEvent.id}
+                </div>
                 <p className="mt-1.5 text-sm font-black leading-5 text-foreground">
                   {t(linkedEvent.title)}
                 </p>
@@ -239,7 +240,7 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
 
 
 
-            {post.externalPreview ? (
+            {post.externalPreview && !linkedEvent ? (
               <div
                 role="link"
                 tabIndex={0}

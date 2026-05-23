@@ -1,9 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { SocialPostCard } from "@/shared/components/feed/SocialPostCard";
+import { BoardRow } from "@/shared/components/feed/BoardRow";
+import { BoardSortBar, type BoardSortKey } from "@/shared/components/feed/BoardSortBar";
 import { text, type LanguageCode } from "@/shared/i18n/config";
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
@@ -12,7 +14,7 @@ import { AdSlot } from "@/shared/components/ads/AdSlot";
 import type { Database } from "@/shared/types/database";
 import type { Event, SocialPost } from "@/shared/types/domain";
 import { useContentTranslations } from "@/shared/hooks/useContentTranslations";
-import { RiHashtag } from "react-icons/ri";
+import { RiHashtag, RiLayoutGridLine, RiListUnordered } from "react-icons/ri";
 
 type AuthUser = {
   id: string;
@@ -39,8 +41,11 @@ export default function Home() {
   );
 }
 
+type ViewMode = "feed" | "board";
+const VIEW_MODE_KEY = "momment.viewMode";
+
 function HomeFeed() {
-  const { dictionary, t } = useI18n();
+  const { dictionary, t, language } = useI18n();
   const searchParams = useSearchParams();
   const activeFeed = searchParams.get("feed") === "following" ? "following" : "for-you";
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -49,6 +54,22 @@ function HomeFeed() {
   const [eventsMap, setEventsMap] = useState<Map<string, Event>>(new Map());
   const [userTopics, setUserTopics] = useState<{ slug: string; label: string; score: number }[]>([]);
   const [activeTopicFilter, setActiveTopicFilter] = useState<string | null>(null);
+
+  // View mode: default based on language
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => {
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem(VIEW_MODE_KEY);
+      if (saved === "feed" || saved === "board") return saved;
+    }
+    return language === "ko" ? "board" : "feed";
+  });
+  const setViewMode = useCallback((m: ViewMode) => {
+    setViewModeState(m);
+    window.localStorage.setItem(VIEW_MODE_KEY, m);
+  }, []);
+
+  // Board sort
+  const [boardSort, setBoardSort] = useState<BoardSortKey>("latest");
 
   const postIds = useMemo(() => posts.map((p) => p.id), [posts]);
   const { getPostBody, getPostTitle } = useContentTranslations(postIds);
@@ -377,47 +398,110 @@ function HomeFeed() {
     });
   }, [posts, activeTopicFilter]);
 
+  // Board-mode sorting (client-side re-order of displayPosts)
+  const sortedPosts = useMemo(() => {
+    if (viewMode !== "board" || boardSort === "latest") return displayPosts;
+    const sorted = [...displayPosts];
+    switch (boardSort) {
+      case "popular":
+        sorted.sort((a, b) => (b.likeCount + b.viewCount * 0.1) - (a.likeCount + a.viewCount * 0.1));
+        break;
+      case "comments":
+        sorted.sort((a, b) => b.replyCount - a.replyCount);
+        break;
+      case "energy":
+        sorted.sort((a, b) => {
+          const aScore = a.linkedEventId ? (eventsMap.get(a.linkedEventId)?.attentionScore ?? 0) : 0;
+          const bScore = b.linkedEventId ? (eventsMap.get(b.linkedEventId)?.attentionScore ?? 0) : 0;
+          return bScore - aScore;
+        });
+        break;
+    }
+    // Keep pinned at top regardless of sort
+    const pinned = sorted.filter((p) => p.isPinned);
+    const rest = sorted.filter((p) => !p.isPinned);
+    return [...pinned, ...rest];
+  }, [displayPosts, viewMode, boardSort, eventsMap]);
+
   return (
     <div className="pb-20">
       {isLoadingPosts ? <LoadingBar /> : null}
 
-      {/* ─── Interest Topic Chip Bar ─── */}
-      {userTopics.length > 0 && activeFeed === "for-you" && (
-        <div className="border-b border-border px-4 py-2.5 overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setActiveTopicFilter(null)}
-              className={`inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-[12px] font-bold transition-all ${
-                !activeTopicFilter
-                  ? "bg-foreground text-background"
-                  : "bg-zinc-100 text-muted-foreground hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
-              }`}
-            >
-              {t(dictionary.search.all)}
-            </button>
-            {userTopics.map((topic) => (
+      {/* ─── View Toggle + Topic Chips ─── */}
+      <div className="border-b border-border px-4 py-2 sm:px-5 flex items-center gap-2">
+        {/* Topic chips (scrollable, takes remaining space) */}
+        {userTopics.length > 0 && activeFeed === "for-you" ? (
+          <div className="flex-1 min-w-0 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-1.5">
               <button
-                key={topic.slug}
-                onClick={() =>
-                  setActiveTopicFilter(
-                    activeTopicFilter === topic.label ? null : topic.label,
-                  )
-                }
-                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-bold transition-all ${
-                  activeTopicFilter === topic.label
-                    ? "bg-blue-600 text-white"
-                    : "bg-zinc-100 text-foreground hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                onClick={() => setActiveTopicFilter(null)}
+                className={`inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-[12px] font-bold transition-all ${
+                  !activeTopicFilter
+                    ? "bg-foreground text-background"
+                    : "bg-zinc-100 text-muted-foreground hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
                 }`}
               >
-                <RiHashtag className="size-3" />
-                {topic.label}
+                {t(dictionary.search.all)}
               </button>
-            ))}
+              {userTopics.map((topic) => (
+                <button
+                  key={topic.slug}
+                  onClick={() =>
+                    setActiveTopicFilter(
+                      activeTopicFilter === topic.label ? null : topic.label,
+                    )
+                  }
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-bold transition-all ${
+                    activeTopicFilter === topic.label
+                      ? "bg-blue-600 text-white"
+                      : "bg-zinc-100 text-foreground hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                  }`}
+                >
+                  <RiHashtag className="size-3" />
+                  {topic.label}
+                </button>
+              ))}
+            </div>
           </div>
+        ) : (
+          <div className="flex-1" />
+        )}
+
+        {/* View toggle */}
+        <div className="flex items-center shrink-0 rounded-lg border border-border p-0.5">
+          <button
+            onClick={() => setViewMode("feed")}
+            className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold transition-all ${
+              viewMode === "feed"
+                ? "bg-foreground text-background"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            title={t(dictionary.home.viewFeed)}
+          >
+            <RiLayoutGridLine className="size-3.5" />
+            <span className="hidden sm:inline">{t(dictionary.home.viewFeed)}</span>
+          </button>
+          <button
+            onClick={() => setViewMode("board")}
+            className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold transition-all ${
+              viewMode === "board"
+                ? "bg-foreground text-background"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            title={t(dictionary.home.viewBoard)}
+          >
+            <RiListUnordered className="size-3.5" />
+            <span className="hidden sm:inline">{t(dictionary.home.viewBoard)}</span>
+          </button>
         </div>
+      </div>
+
+      {/* ─── Board Sort Bar (board mode only) ─── */}
+      {viewMode === "board" && !isLoadingPosts && sortedPosts.length > 0 && (
+        <BoardSortBar value={boardSort} onChange={setBoardSort} />
       )}
 
-      <div className="divide-y divide-border">
+      <div className={viewMode === "feed" ? "divide-y divide-border" : ""}>
         {isLoadingPosts ? (
           <FeedSkeleton />
         ) : null}
@@ -440,22 +524,42 @@ function HomeFeed() {
             actionLabel={t(dictionary.nav.explore)}
           />
         ) : null}
-        {displayPosts.map((post, idx) => (
-          <div key={post.id}>
-            <SocialPostCard
-              post={post}
-              linkedEvent={post.linkedEventId ? eventsMap.get(post.linkedEventId) ?? null : null}
-              translatedBody={getPostBody(post.id, post.body)}
-              translatedTitle={getPostTitle(post.id, post.title)}
-              currentUserId={authUser?.id ?? null}
-              onRemoved={() => setPosts((prev) => prev.filter((p) => p.id !== post.id))}
-            />
-            {/* Insert ad after every 5th post */}
-            {idx === 4 && (
-              <AdSlot position="feed_mid" size="native" adsenseSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_FEED} />
-            )}
-          </div>
-        ))}
+
+        {/* ─── Feed View ─── */}
+        {viewMode === "feed" &&
+          sortedPosts.map((post, idx) => (
+            <div key={post.id}>
+              <SocialPostCard
+                post={post}
+                linkedEvent={post.linkedEventId ? eventsMap.get(post.linkedEventId) ?? null : null}
+                translatedBody={getPostBody(post.id, post.body)}
+                translatedTitle={getPostTitle(post.id, post.title)}
+                currentUserId={authUser?.id ?? null}
+                onRemoved={() => setPosts((prev) => prev.filter((p) => p.id !== post.id))}
+              />
+              {/* Insert ad after every 5th post */}
+              {idx === 4 && (
+                <AdSlot position="feed_mid" size="native" adsenseSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_FEED} />
+              )}
+            </div>
+          ))}
+
+        {/* ─── Board View ─── */}
+        {viewMode === "board" &&
+          sortedPosts.map((post, idx) => (
+            <div key={post.id}>
+              <BoardRow
+                post={post}
+                linkedEvent={post.linkedEventId ? eventsMap.get(post.linkedEventId) ?? null : null}
+                translatedTitle={getPostTitle(post.id, post.title)}
+                currentUserId={authUser?.id ?? null}
+                onRemoved={() => setPosts((prev) => prev.filter((p) => p.id !== post.id))}
+              />
+              {idx === 9 && (
+                <AdSlot position="feed_mid" size="native" adsenseSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_FEED} />
+              )}
+            </div>
+          ))}
       </div>
     </div>
   );
@@ -555,16 +659,6 @@ function mapPostRowToSocialPost(
           title: text(row.link_title ?? row.link_url, row.link_title ?? row.link_url, row.link_title ?? row.link_url),
           description: text(row.link_description ?? row.link_url, row.link_description ?? row.link_url, row.link_description ?? row.link_url),
           imageUrl: row.link_image_url,
-        }
-      : attention
-      ? {
-         sourceName: `a/${attention.slug ?? attention.id.slice(0, 8)}`,
-          title: text(attention.title, attention.title, attention.title),
-          description: text(
-            attention.description ?? linkedAttentionFallbackDesc.ko,
-            attention.description ?? linkedAttentionFallbackDesc.en,
-            attention.description ?? linkedAttentionFallbackDesc.es,
-          ),
         }
       : null,
     translationStatus: row.translation_status === "translated" ? "ready" : "queued",
