@@ -434,6 +434,15 @@ export default function AdminPage() {
         </p>
         <WithdrawalQueuePanel />
       </section>
+
+      {/* ─── Ad Network Management ─── */}
+      <section className="rounded-2xl border border-border bg-background p-5 shadow-sm">
+        <h2 className="text-lg font-black text-foreground">광고 네트워크 관리</h2>
+        <p className="mt-1 text-sm font-semibold leading-6 text-muted-foreground">
+          Adsterra, AdSense 등 외부 광고 네트워크 스크립트를 관리합니다. 스크립트 코드를 직접 붙여넣으세요.
+        </p>
+        <AdNetworkPanel />
+      </section>
     </div>
   );
 }
@@ -749,6 +758,303 @@ function WithdrawalQueuePanel() {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+/* ── Ad Network Panel ───────────────────────────────────────── */
+
+type AdPlacement = {
+  id: string;
+  network_name: string;
+  unit_name: string;
+  unit_type: string;
+  position: string;
+  script_code: string;
+  is_active: boolean;
+  priority: number;
+  notes: string | null;
+  created_at: string;
+};
+
+function AdNetworkPanel() {
+  const [placements, setPlacements] = useState<AdPlacement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCode, setEditCode] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [newForm, setNewForm] = useState({
+    network_name: "adsterra",
+    unit_name: "",
+    unit_type: "script",
+    position: "sidebar",
+    script_code: "",
+    priority: 0,
+    notes: "",
+  });
+
+  useEffect(() => {
+    fetchPlacements();
+  }, []);
+
+  async function fetchPlacements() {
+    try {
+      const res = await fetch("/api/admin/ad-placements");
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      setPlacements(data.placements ?? []);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function toggleActive(id: string, is_active: boolean) {
+    setSaving(true);
+    await fetch("/api/admin/ad-placements", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, is_active: !is_active }),
+    });
+    await fetchPlacements();
+    setSaving(false);
+  }
+
+  async function saveScript(id: string) {
+    setSaving(true);
+    await fetch("/api/admin/ad-placements", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, script_code: editCode }),
+    });
+    setEditingId(null);
+    await fetchPlacements();
+    setSaving(false);
+  }
+
+  async function deletePlacement(id: string) {
+    if (!confirm("이 광고 유닛을 삭제하시겠습니까?")) return;
+    setSaving(true);
+    await fetch(`/api/admin/ad-placements?id=${id}`, { method: "DELETE" });
+    await fetchPlacements();
+    setSaving(false);
+  }
+
+  async function addPlacement() {
+    if (!newForm.unit_name || !newForm.script_code) return;
+    setSaving(true);
+    await fetch("/api/admin/ad-placements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newForm),
+    });
+    setShowAdd(false);
+    setNewForm({
+      network_name: "adsterra",
+      unit_name: "",
+      unit_type: "script",
+      position: "sidebar",
+      script_code: "",
+      priority: 0,
+      notes: "",
+    });
+    await fetchPlacements();
+    setSaving(false);
+  }
+
+  if (loading) return <div className="mt-4 h-32 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900/50" />;
+
+  return (
+    <div className="mt-4 space-y-4">
+      {error && <p className="text-sm font-bold text-rose-600">{error}</p>}
+
+      {/* Add button */}
+      <button
+        onClick={() => setShowAdd(!showAdd)}
+        className="h-10 rounded-full bg-blue-600 px-5 text-sm font-black text-white transition-colors hover:bg-blue-700"
+      >
+        {showAdd ? "취소" : "+ 새 광고 유닛 추가"}
+      </button>
+
+      {/* Add form */}
+      {showAdd && (
+        <div className="rounded-xl border border-border bg-zinc-50 p-4 dark:bg-zinc-900/30 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="네트워크">
+              <select
+                value={newForm.network_name}
+                onChange={(e) => setNewForm({ ...newForm, network_name: e.target.value })}
+                className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+              >
+                <option value="adsterra">Adsterra</option>
+                <option value="adsense">AdSense</option>
+                <option value="carbon">Carbon Ads</option>
+                <option value="other">기타</option>
+              </select>
+            </Field>
+            <Field label="유닛 이름">
+              <input
+                value={newForm.unit_name}
+                onChange={(e) => setNewForm({ ...newForm, unit_name: e.target.value })}
+                placeholder="NativeBanner_2"
+                className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+              />
+            </Field>
+            <Field label="유닛 타입">
+              <select
+                value={newForm.unit_type}
+                onChange={(e) => setNewForm({ ...newForm, unit_type: e.target.value })}
+                className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+              >
+                <option value="script">Script</option>
+                <option value="native_banner">Native Banner</option>
+                <option value="popunder">Popunder</option>
+                <option value="social_bar">Social Bar</option>
+              </select>
+            </Field>
+            <Field label="위치">
+              <select
+                value={newForm.position}
+                onChange={(e) => setNewForm({ ...newForm, position: e.target.value })}
+                className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+              >
+                <option value="sidebar">Sidebar</option>
+                <option value="global">Global (전체 페이지)</option>
+                <option value="feed_top">Feed Top</option>
+                <option value="feed_mid">Feed Mid</option>
+                <option value="feed_bottom">Feed Bottom</option>
+              </select>
+            </Field>
+            <Field label="우선순위">
+              <input
+                type="number"
+                value={newForm.priority}
+                onChange={(e) => setNewForm({ ...newForm, priority: Number(e.target.value) })}
+                className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+              />
+            </Field>
+            <Field label="메모">
+              <input
+                value={newForm.notes}
+                onChange={(e) => setNewForm({ ...newForm, notes: e.target.value })}
+                className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+              />
+            </Field>
+          </div>
+          <Field label="스크립트 코드 (HTML/JS 전체 붙여넣기)">
+            <textarea
+              value={newForm.script_code}
+              onChange={(e) => setNewForm({ ...newForm, script_code: e.target.value })}
+              rows={4}
+              placeholder='<script src="https://..."></script>'
+              className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono dark:bg-zinc-900"
+            />
+          </Field>
+          <button
+            onClick={addPlacement}
+            disabled={saving || !newForm.unit_name || !newForm.script_code}
+            className="h-10 rounded-full bg-foreground px-5 text-sm font-black text-background disabled:opacity-50"
+          >
+            {saving ? "저장 중..." : "추가"}
+          </button>
+        </div>
+      )}
+
+      {/* List */}
+      <div className="space-y-3">
+        {placements.map((p) => (
+          <div key={p.id} className="rounded-xl border border-border bg-zinc-50 p-4 dark:bg-zinc-900/30">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${
+                    p.is_active
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                      : "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400"
+                  }`}>
+                    {p.is_active ? "Active" : "Off"}
+                  </span>
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                    {p.network_name}
+                  </span>
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                    {p.position}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm font-black text-foreground">{p.unit_name}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Type: {p.unit_type} · Priority: {p.priority}
+                  {p.notes && ` · ${p.notes}`}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  onClick={() => toggleActive(p.id, p.is_active)}
+                  disabled={saving}
+                  className="text-xs font-bold text-blue-600 hover:underline disabled:opacity-50"
+                >
+                  {p.is_active ? "비활성화" : "활성화"}
+                </button>
+                <button
+                  onClick={() => {
+                    if (editingId === p.id) {
+                      setEditingId(null);
+                    } else {
+                      setEditingId(p.id);
+                      setEditCode(p.script_code);
+                    }
+                  }}
+                  className="text-xs font-bold text-amber-600 hover:underline"
+                >
+                  {editingId === p.id ? "닫기" : "코드 수정"}
+                </button>
+                <button
+                  onClick={() => deletePlacement(p.id)}
+                  disabled={saving}
+                  className="text-xs font-bold text-rose-600 hover:underline disabled:opacity-50"
+                >
+                  삭제
+                </button>
+              </div>
+            </div>
+
+            {/* Collapsed script preview */}
+            {editingId !== p.id && (
+              <pre className="mt-2 rounded-lg bg-zinc-100 p-2 text-[10px] text-muted-foreground overflow-x-auto dark:bg-zinc-800/50 max-h-[60px] overflow-hidden">
+                {p.script_code}
+              </pre>
+            )}
+
+            {/* Edit mode */}
+            {editingId === p.id && (
+              <div className="mt-3 space-y-2">
+                <textarea
+                  value={editCode}
+                  onChange={(e) => setEditCode(e.target.value)}
+                  rows={5}
+                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono dark:bg-zinc-900"
+                />
+                <button
+                  onClick={() => saveScript(p.id)}
+                  disabled={saving}
+                  className="h-9 rounded-full bg-foreground px-4 text-xs font-black text-background disabled:opacity-50"
+                >
+                  {saving ? "저장 중..." : "스크립트 저장"}
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {placements.length === 0 && (
+          <p className="text-sm font-semibold text-muted-foreground py-4 text-center">
+            등록된 광고 유닛이 없습니다.
+          </p>
+        )}
       </div>
     </div>
   );

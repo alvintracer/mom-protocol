@@ -21,6 +21,7 @@ import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
 import { useTranslate } from "@/shared/hooks/useTranslate";
 import { AdSlot } from "@/shared/components/ads/AdSlot";
+import { NetworkAdSlot } from "@/shared/components/ads/NetworkAds";
 import type { Database } from "@/shared/types/database";
 
 type AttentionCluster = Database["public"]["Tables"]["attention_clusters"]["Row"];
@@ -597,6 +598,7 @@ export function RightSidebar() {
             size="native"
             adsenseSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_SIDEBAR}
           />
+          <NetworkAdSlot position="sidebar" className="mt-3" />
 
           {/* ─── Footer ─── */}
           <div className="px-4 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-muted-foreground/70">

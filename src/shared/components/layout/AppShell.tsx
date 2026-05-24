@@ -7,6 +7,7 @@ import { LeftSidebar } from "@/shared/components/layout/LeftSidebar";
 import { MobileNav } from "@/shared/components/layout/MobileNav";
 import { RightSidebar } from "@/shared/components/layout/RightSidebar";
 import { TopBar } from "@/shared/components/layout/TopBar";
+import { GlobalAdScripts } from "@/shared/components/ads/NetworkAds";
 
 /** Pages that should use full-width center column (no max-w constraint) */
 const FULL_WIDTH_PATHS = ["/explore", "/search", "/markets"];
@@ -45,6 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <RightSidebar />
       </div>
       <MobileNav />
+      <GlobalAdScripts />
     </div>
   );
 }

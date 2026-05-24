@@ -1,268 +1,360 @@
 "use client";
 
+import { useState } from "react";
 import { useI18n } from "@/shared/i18n/LanguageProvider";
-import { RiArrowRightLine, RiFireLine, RiBankLine, RiExchangeDollarLine, RiCoinsLine, RiTrophyLine, RiShieldCheckLine } from "react-icons/ri";
-import Link from "next/link";
+
+type Tab = "overview" | "earning" | "royalty" | "referral" | "spending" | "withdrawal";
 
 export default function EconomyPage() {
-  const { language } = useI18n();
-  const isKo = language === "ko";
+  const { dictionary: d, t } = useI18n();
+  const ep = d.economyPage;
+  const [tab, setTab] = useState<Tab>("overview");
+
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "overview", label: t(ep.tabs.overview) },
+    { key: "earning", label: t(ep.tabs.earning) },
+    { key: "royalty", label: t(ep.tabs.royalty) },
+    { key: "referral", label: t(ep.tabs.referral) },
+    { key: "spending", label: t(ep.tabs.spending) },
+    { key: "withdrawal", label: t(ep.tabs.withdrawal) },
+  ];
 
   return (
-    <div className="flex-1 min-w-0 bg-zinc-50/30 dark:bg-zinc-950/20">
-      <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto pb-20">
-        
-        <header className="mb-10 text-center">
-          <p className="text-sm font-black text-blue-600 dark:text-blue-400 tracking-widest uppercase mb-2">
-            Documentation
-          </p>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">
-            {isKo ? "momment. 소셜파이 구조" : "momment. Social-fi Structure"}
+    <div className="w-full">
+      <div className="border-b border-border bg-background px-4 pt-5 pb-0 sm:px-6">
+        <div className="mx-auto max-w-3xl">
+          <h1 className="text-[20px] font-black text-foreground sm:text-[24px]">
+            {t(ep.title)}
           </h1>
-          <p className="mt-4 text-[15px] font-medium text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-            {isKo
-              ? "Social-fi (소셜파이): 당신의 평범한 소셜 활동이 곧 자산이 됩니다. 포스트 작성, 정보 공유, 그리고 어텐션 테이킹(Attention Taking) 활동이 플랫폼의 가치를 키우고, 그 성장은 온전히 당신의 실질적인 수익으로 직결됩니다."
-              : "Social-fi: Your everyday social activities become digital assets. Posting, sharing info, and Attention Taking activities grow the platform's value, translating directly into your own monetization."}
+          <p className="mt-1 text-[12px] text-muted-foreground sm:text-[13px]">
+            {t(ep.subtitle)}
           </p>
-        </header>
-
-        <div className="space-y-6">
-          
-          {/* Core Formula */}
-          <section className="rounded-3xl border border-blue-200/50 bg-gradient-to-br from-blue-50 to-white p-6 sm:p-8 dark:border-blue-900/30 dark:from-blue-950/20 dark:to-zinc-950 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex size-10 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400">
-                <RiExchangeDollarLine className="size-5" />
-              </div>
-              <h2 className="text-xl font-black text-foreground">
-                {isKo ? "핵심 공식: 변동 환율제" : "Core Formula: Dynamic Rate"}
-              </h2>
-            </div>
-            <p className="mb-5 text-[14px] font-medium text-muted-foreground">
-              {isKo
-              ? "MOM의 가치는 플랫폼 볼트(Vault)에 쌓인 달러와 시장에 풀린 전체 MOM 유통 에너지에 의해 실시간으로 결정됩니다."
-              : "The value of MOM is determined in real-time by the USD accumulated in the Vault and the total MOM supply."}
-            </p>
-            <div className="rounded-2xl border border-blue-200/50 bg-white/60 p-4 sm:p-6 backdrop-blur-sm dark:border-blue-800/30 dark:bg-zinc-900/60 font-mono text-sm sm:text-[15px] font-bold text-blue-900 dark:text-blue-200 flex flex-col items-center text-center gap-2">
-              <p>MOM Rate ($) = Vault USD / Total MOM Supply</p>
-              <span className="text-xs text-blue-500/70 dark:text-blue-400/50">Minimum Rate Floor: $0.001</span>
-            </div>
-          </section>
-
-          {/* Virtuous Cycle */}
-          <section className="rounded-3xl border border-emerald-200/50 bg-gradient-to-br from-emerald-50 to-white p-6 sm:p-8 dark:border-emerald-900/30 dark:from-emerald-950/20 dark:to-zinc-950 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex size-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400">
-                <RiFireLine className="size-5" />
-              </div>
-              <h2 className="text-xl font-black text-foreground">
-                {isKo ? "생태계 선순환 메커니즘" : "Virtuous Cycle Mechanism"}
-              </h2>
-            </div>
-            
-            <div className="mt-6 relative px-4 py-8 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl bg-white/50 dark:bg-zinc-900/30 overflow-hidden">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10 text-center">
-                <div>
-                  <h3 className="font-black text-emerald-700 dark:text-emerald-400">1. {isKo ? "유저 활동" : "User Activity"}</h3>
-                  <p className="mt-2 text-sm text-muted-foreground font-medium">
-                    {isKo ? "양질의 포스트, 토론, 확산을 통해 MOM이 발행됩니다." : "MOM is minted through quality posts, discussions, and reach."}
-                  </p>
-                </div>
-                <div className="hidden md:flex items-center justify-center text-emerald-300">
-                  <RiArrowRightLine className="size-6" />
-                </div>
-                <div>
-                  <h3 className="font-black text-emerald-700 dark:text-emerald-400">2. {isKo ? "트래픽 & 수익" : "Traffic & Revenue"}</h3>
-                  <p className="mt-2 text-sm text-muted-foreground font-medium">
-                    {isKo ? "트래픽이 증가하여 광고 및 스폰서십 수익($)이 볼트에 쌓입니다." : "Increased traffic generates ad & sponsorship revenue ($) for the Vault."}
-                  </p>
-                </div>
-                <div className="hidden md:flex items-center justify-center text-emerald-300">
-                  <RiArrowRightLine className="size-6" />
-                </div>
-                <div>
-                  <h3 className="font-black text-emerald-700 dark:text-emerald-400">3. {isKo ? "가치 상승" : "Value Appreciation"}</h3>
-                  <p className="mt-2 text-sm text-muted-foreground font-medium">
-                    {isKo ? "볼트 달러(Vault USD) 증가와 스폰서 비딩 소각으로 MOM 환율이 상승합니다." : "Vault USD grows and ad bids burn MOM, driving up the MOM exchange rate."}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* AIO Oracle System */}
-          <section className="rounded-3xl border border-indigo-200/50 bg-gradient-to-br from-indigo-50 to-white p-6 sm:p-8 dark:border-indigo-900/30 dark:from-indigo-950/20 dark:to-zinc-950 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex size-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400">
-                <RiShieldCheckLine className="size-5" />
-              </div>
-              <h2 className="text-xl font-black text-foreground">
-                {isKo ? "AIO (Agentic interoperable Oracle) 검증" : "AIO Agentic Verification"}
-              </h2>
-            </div>
-            <p className="mb-5 text-[14px] font-medium text-muted-foreground leading-relaxed">
-              {isKo
-                ? "momment.의 모든 정보는 AI Agent들에 의해 빠르고 정확하게 자율 검증됩니다. 어텐션 토론장이 커질수록, 정확한 근거 링크를 제출하여 확정(Finalize)에 기여한 유저는 어텐션 점수에 비례하는 막대한 MOM 에너지를 즉시 획득합니다."
-                : "Information on momment. is autonomously verified by AI Agents. As attention clusters grow, users who submit valid evidence URLs and contribute to finalization receive massive, real-time MOM Energy rewards scaling with attention score."}
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2 mt-6">
-              <div className="rounded-2xl border border-indigo-100 bg-white/60 p-5 dark:border-indigo-900/30 dark:bg-zinc-900/40">
-                <h3 className="text-[14px] font-black text-indigo-700 dark:text-indigo-400">
-                  {isKo ? "1. 근거 제출 및 자동 추출" : "1. Submit & Auto-Extract"}
-                </h3>
-                <p className="mt-2 text-[13px] font-medium text-muted-foreground leading-relaxed">
-                  {isKo ? "언론사나 공식 데이터 링크를 제출하면, 시스템이 즉시 원본 데이터를 스크랩하여 AI 검증을 준비합니다." : "Submit a news or official data link. The system immediately scrapes raw data to prepare for AI verification."}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-indigo-100 bg-white/60 p-5 dark:border-indigo-900/30 dark:bg-zinc-900/40">
-                <h3 className="text-[14px] font-black text-indigo-700 dark:text-indigo-400">
-                  {isKo ? "2. 멀티 LLM 교차 검증" : "2. Multi-LLM Consensus"}
-                </h3>
-                <p className="mt-2 text-[13px] font-medium text-muted-foreground leading-relaxed">
-                  {isKo ? "서로 다른 최상위 AI 모델들이 데이터를 교차 검증하고, 만장일치로 통과되면 즉시 안건이 확정되며 보상이 지급됩니다." : "Top-tier AI models cross-verify the data. Upon consensus, the outcome is instantly finalized and rewards are distributed."}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* Revenue Tracks */}
-          <section className="rounded-3xl border border-border bg-background p-6 sm:p-8 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex size-10 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                <RiBankLine className="size-5" />
-              </div>
-              <h2 className="text-xl font-black text-foreground">
-                {isKo ? "수익 및 소각 구조" : "Revenue & Burn Structure"}
-              </h2>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Card 
-                title={isKo ? "광고 비딩 (General Ads)" : "Ad Bidding"}
-                desc={isKo ? "광고주가 MOM으로 플랫폼 슬롯을 입찰합니다. 입찰된 MOM은 100% 소각(Burn)되어 총 발행량이 감소하고, 환율이 상승합니다." : "Advertisers bid for slots using MOM. 100% of the MOM is burned, decreasing supply and increasing the rate."}
-              />
-              <Card 
-                title={isKo ? "어텐션 스폰서십" : "Attention Sponsorship"}
-                desc={isKo ? "스폰서가 특정 어텐션에 MOM을 투자합니다. 25%는 빌더, 25%는 기여자에게 분배되며 나머지 50%는 소각됩니다." : "Sponsors invest MOM into Attentions. 25% goes to builders, 25% to contributors, and 50% is burned."}
-              />
-              <Card 
-                title={isKo ? "에너지 결제 구매" : "Energy Purchases"}
-                desc={isKo ? "유저가 결제를 통해 MOM 에너지를 충전하면, 해당 결제 대금(USD)은 전액 플랫폼 볼트(Vault)에 적립됩니다." : "When users purchase MOM Energy, the USD payment goes entirely into the Platform Vault."}
-              />
-              <Card 
-                title={isKo ? "도네이션 (응원)" : "Donations"}
-                desc={isKo ? "팬이 어텐션을 후원하면 클러스터 점수가 크게 상승하며, 도너는 기여의 증표로 일정 비율의 MOM을 보상받습니다." : "Fans donate to Attentions to boost scores, receiving a small MOM reward as proof of contribution."}
-              />
-            </div>
-          </section>
-
-          {/* Withdrawals */}
-          <section className="rounded-3xl border border-border bg-background p-6 sm:p-8 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex size-10 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                <RiCoinsLine className="size-5" />
-              </div>
-              <h2 className="text-xl font-black text-foreground">
-                {isKo ? "수시 출금 시스템" : "On-Demand Withdrawals"}
-              </h2>
-            </div>
-            <p className="mb-5 text-[14px] font-medium text-muted-foreground leading-relaxed">
-              {isKo 
-                ? "월말 정산을 기다릴 필요 없이, 원할 때 언제든 보유한 MOM을 시장 환율에 맞게 달러(USDC)로 출금 요청할 수 있습니다." 
-                : "No need to wait for month-end settlements. Withdraw your MOM for USD(C) at the current market rate whenever you want."}
-            </p>
-            <ul className="space-y-3 text-sm font-semibold text-foreground bg-zinc-50 dark:bg-zinc-900/50 p-5 rounded-2xl border border-border">
-              <li className="flex justify-between items-center pb-3 border-b border-border/50">
-                <span className="text-muted-foreground">{isKo ? "최소 출금액" : "Minimum Withdrawal"}</span>
-                <span>1,000 MOM</span>
-              </li>
-              <li className="flex justify-between items-center pb-3 border-b border-border/50">
-                <span className="text-muted-foreground">{isKo ? "일일 한도 (유저당)" : "Daily Limit (Per User)"}</span>
-                <span>50,000 MOM</span>
-              </li>
-              <li className="flex justify-between items-center">
-                <span className="text-muted-foreground">{isKo ? "월간 한도 (유저당)" : "Monthly Limit (Per User)"}</span>
-                <span>200,000 MOM (기본)</span>
-              </li>
-            </ul>
-          </section>
-
-          {/* CR Tiers */}
-          <section className="rounded-3xl border border-amber-200/50 bg-gradient-to-br from-amber-50 to-white p-6 sm:p-8 dark:border-amber-900/30 dark:from-amber-950/10 dark:to-zinc-950 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex size-10 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400">
-                <RiTrophyLine className="size-5" />
-              </div>
-              <h2 className="text-xl font-black text-foreground">
-                {isKo ? "기여자 등급 (Contribution Tiers)" : "Contribution Tiers"}
-              </h2>
-            </div>
-            <p className="mb-5 text-[14px] font-medium text-muted-foreground leading-relaxed">
-              {isKo 
-                ? "플랫폼에 기여하여 높은 Contribution Ratio(CR) 순위를 달성할수록 출금 수수료(Spread) 할인을 받고, 월간 출금 한도가 증가합니다." 
-                : "Achieve higher Contribution Ratio (CR) rankings to unlock reduced withdrawal spreads and higher monthly withdrawal limits."}
-            </p>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <TierCard 
-                tier="🥇 Gold" 
-                desc={isKo ? "상위 5% 이내" : "Top 5%"} 
-                spread="3%" 
-                limit="500,000 MOM" 
-              />
-              <TierCard 
-                tier="🥈 Silver" 
-                desc={isKo ? "상위 20% 이내" : "Top 20%"} 
-                spread="4%" 
-                limit="300,000 MOM" 
-              />
-              <TierCard 
-                tier="⚡ Member" 
-                desc={isKo ? "일반 기여자" : "Regular"} 
-                spread="5%" 
-                limit="200,000 MOM" 
-              />
-            </div>
-          </section>
-
-          <div className="pt-6 flex justify-center">
-            <Link 
-              href="/rewards" 
-              className="inline-flex h-12 items-center justify-center rounded-full bg-blue-600 px-8 text-[15px] font-black text-white shadow-lg shadow-blue-600/20 transition-all hover:scale-105 hover:bg-blue-700"
-            >
-              {isKo ? "Vault 대시보드 보기" : "View Vault Dashboard"}
-              <RiArrowRightLine className="ml-2 size-5" />
-            </Link>
-          </div>
-
+          <nav className="mt-4 -mb-px flex gap-0 overflow-x-auto scrollbar-none">
+            {tabs.map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setTab(item.key)}
+                className={`relative shrink-0 px-3 py-2.5 text-[13px] font-semibold transition-colors sm:px-4 ${
+                  tab === item.key
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {item.label}
+                {tab === item.key && (
+                  <span className="absolute inset-x-0 bottom-0 h-[2px] rounded-full bg-blue-600" />
+                )}
+              </button>
+            ))}
+          </nav>
         </div>
       </div>
+      <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
+        {tab === "overview" && <OverviewTab />}
+        {tab === "earning" && <EarningTab />}
+        {tab === "royalty" && <RoyaltyTab />}
+        {tab === "referral" && <ReferralTab />}
+        {tab === "spending" && <SpendingTab />}
+        {tab === "withdrawal" && <WithdrawalTab />}
+      </main>
     </div>
   );
 }
 
-function Card({ title, desc }: { title: string; desc: string }) {
+/* ─── Shared Components ──────────────────────────── */
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h1 className="text-[22px] font-black text-foreground mb-2">{children}</h1>;
+}
+
+function SectionDesc({ children }: { children: React.ReactNode }) {
+  return <p className="text-[14px] text-muted-foreground mb-6 leading-relaxed">{children}</p>;
+}
+
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-background p-5 hover:border-blue-200 hover:bg-blue-50/30 transition-colors dark:hover:border-blue-900/30 dark:hover:bg-blue-900/10">
-      <h3 className="text-[15px] font-black text-foreground">{title}</h3>
-      <p className="mt-2 text-[13px] font-medium text-muted-foreground leading-relaxed">{desc}</p>
+    <div className={`rounded-xl border border-border bg-background p-4 sm:p-5 ${className}`}>
+      {children}
     </div>
   );
 }
 
-function TierCard({ tier, desc, spread, limit }: { tier: string; desc: string; spread: string; limit: string }) {
+function DataTable({ headers, rows }: { headers: string[]; rows: (string | React.ReactNode)[][] }) {
   return (
-    <div className="rounded-2xl border border-amber-200/40 bg-white/60 p-5 text-center dark:border-amber-700/30 dark:bg-zinc-900/50">
-      <p className="text-[16px] font-black text-amber-600 dark:text-amber-500">{tier}</p>
-      <p className="text-[12px] font-bold text-muted-foreground mt-1">{desc}</p>
-      <div className="mt-4 space-y-1.5 text-[13px] font-bold">
-        <p className="text-foreground flex justify-between">
-          <span className="text-muted-foreground">Spread</span> {spread}
-        </p>
-        <p className="text-foreground flex justify-between">
-          <span className="text-muted-foreground">Limit</span> {limit}
-        </p>
+    <div className="overflow-x-auto">
+      <table className="w-full text-[13px]">
+        <thead>
+          <tr className="border-b border-border">
+            {headers.map((h, i) => (
+              <th key={i} className="py-2 px-3 text-left font-bold text-muted-foreground text-[11px] uppercase tracking-wider">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className="border-b border-border/50 last:border-0">
+              {row.map((cell, j) => (
+                <td key={j} className="py-2.5 px-3 text-foreground">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Badge({ children, variant = "blue" }: { children: React.ReactNode; variant?: "blue" | "green" | "amber" | "red" }) {
+  const colors = {
+    blue: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
+    green: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+    amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
+    red: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400",
+  };
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${colors[variant]}`}>
+      {children}
+    </span>
+  );
+}
+
+/* ─── Tab Content ────────────────────────────────── */
+
+function OverviewTab() {
+  const { dictionary: d, t } = useI18n();
+  const ep = d.economyPage;
+  return (
+    <div className="space-y-6">
+      <div>
+        <SectionTitle>{t(ep.overview.whatIsMom)}</SectionTitle>
+        <SectionDesc>{t(ep.overview.whatIsMomDesc)}</SectionDesc>
       </div>
+      <Card>
+        <h3 className="text-[15px] font-bold text-foreground mb-3">{t(ep.overview.dynamicRate)}</h3>
+        <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900/50 p-4 font-mono text-[14px] text-center">
+          <span className="text-muted-foreground">$/MOM = </span>
+          <span className="font-bold text-blue-600">Vault USD</span>
+          <span className="text-muted-foreground"> ÷ </span>
+          <span className="font-bold text-blue-600">Total MOM Supply</span>
+        </div>
+        <p className="mt-3 text-[12px] text-muted-foreground leading-relaxed">{t(ep.overview.dynamicRateDesc)}</p>
+      </Card>
+      <Card>
+        <h3 className="text-[15px] font-bold text-foreground mb-4">{t(ep.overview.energyFlow)}</h3>
+        <div className="flex flex-col gap-3 text-[12px]">
+          <div className="flex items-center gap-3">
+            <Badge variant="green">MINT</Badge>
+            <span className="text-muted-foreground">→</span>
+            <span className="text-foreground font-medium">{t(ep.overview.mintDesc)}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant="red">BURN</Badge>
+            <span className="text-muted-foreground">→</span>
+            <span className="text-foreground font-medium">{t(ep.overview.burnDesc)}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant="blue">VALUE</Badge>
+            <span className="text-muted-foreground">→</span>
+            <span className="text-foreground font-medium">{t(ep.overview.valueDesc)}</span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Burn = Ecosystem Return */}
+      <Card className="border-emerald-200/60 dark:border-emerald-800/40 bg-emerald-50/30 dark:bg-emerald-950/10">
+        <div className="flex gap-3">
+          <div className="shrink-0 mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-[16px] dark:bg-emerald-900/50">
+            🔥
+          </div>
+          <div>
+            <h3 className="text-[15px] font-black text-foreground mb-2">
+              {t(ep.overview.burnExplainerTitle)}
+            </h3>
+            <p className="text-[13px] text-muted-foreground leading-relaxed mb-4">
+              {t(ep.overview.burnExplainerBody)}
+            </p>
+            <div className="rounded-lg bg-white/60 dark:bg-zinc-900/40 border border-emerald-200/50 dark:border-emerald-800/30 px-4 py-3">
+              <p className="text-[12px] font-bold text-emerald-700 dark:text-emerald-400 text-center leading-relaxed">
+                {t(ep.overview.burnExplainerFormula)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function EarningTab() {
+  const { dictionary: d, t } = useI18n();
+  const ep = d.economyPage;
+  return (
+    <div className="space-y-6">
+      <div>
+        <SectionTitle>{t(ep.earning.directAction)}</SectionTitle>
+        <SectionDesc>{t(ep.overview.whatIsMomDesc)}</SectionDesc>
+      </div>
+      <Card>
+        <DataTable
+          headers={[t(ep.earning.directAction), "MOM Energy", ""]}
+          rows={[
+            [t(ep.earning.post), <Badge key="p" variant="green">+2.0</Badge>, t(ep.earning.postDesc)],
+            [t(ep.earning.repost), <Badge key="r" variant="green">+1.5</Badge>, t(ep.earning.repostDesc)],
+            [t(ep.earning.comment), <Badge key="c" variant="green">+1.0</Badge>, t(ep.earning.commentDesc)],
+            [t(ep.earning.reaction), <Badge key="l" variant="green">+0.05</Badge>, t(ep.earning.reactionDesc)],
+          ]}
+        />
+      </Card>
+    </div>
+  );
+}
+
+function RoyaltyTab() {
+  const { dictionary: d, t } = useI18n();
+  const ep = d.economyPage;
+  return (
+    <div className="space-y-6">
+      <div>
+        <SectionTitle>{t(ep.royalty.title)}</SectionTitle>
+        <SectionDesc>{t(ep.royalty.desc)}</SectionDesc>
+      </div>
+      <Card>
+        <h3 className="text-[14px] font-bold text-foreground mb-1">{t(ep.royalty.builderRoyalty)}</h3>
+        <p className="text-[12px] text-muted-foreground mb-3">{t(ep.royalty.builderDesc)}</p>
+        <DataTable
+          headers={[t(ep.royalty.trigger), t(ep.royalty.reward), t(ep.royalty.condition)]}
+          rows={[
+            [t(ep.royalty.postInAttention), <Badge key="1" variant="green">+0.4 MOM</Badge>, t(ep.royalty.notSelf)],
+            [t(ep.royalty.repostInAttention), <Badge key="2" variant="green">+0.2 MOM</Badge>, t(ep.royalty.notSelf)],
+            [t(ep.royalty.commentInAttention), <Badge key="3" variant="green">+0.1 MOM</Badge>, t(ep.royalty.notSelf)],
+          ]}
+        />
+        <div className="mt-3 text-[11px] text-muted-foreground">
+          {t(ep.royalty.dailyCap)}: <Badge variant="amber">80 MOM</Badge> · {t(ep.royalty.accountAge)}
+        </div>
+      </Card>
+      <Card>
+        <h3 className="text-[14px] font-bold text-foreground mb-1">{t(ep.royalty.authorRoyalty)}</h3>
+        <p className="text-[12px] text-muted-foreground mb-3">{t(ep.royalty.authorDesc)}</p>
+        <DataTable
+          headers={[t(ep.royalty.trigger), t(ep.royalty.reward), t(ep.royalty.condition)]}
+          rows={[
+            [t(ep.royalty.repostMyPost), <Badge key="4" variant="green">+0.3 MOM</Badge>, t(ep.royalty.notSelf)],
+            [t(ep.royalty.commentMyPost), <Badge key="5" variant="green">+0.2 MOM</Badge>, t(ep.royalty.notSelf)],
+            [t(ep.royalty.reactionMyPost), <Badge key="6" variant="green">+0.01 MOM</Badge>, t(ep.royalty.notSelf)],
+          ]}
+        />
+        <div className="mt-3 text-[11px] text-muted-foreground">
+          {t(ep.royalty.dailyCap)}: <Badge variant="amber">40 MOM</Badge> · {t(ep.royalty.accountAge)}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function ReferralTab() {
+  const { dictionary: d, t } = useI18n();
+  const ep = d.economyPage;
+  return (
+    <div className="space-y-6">
+      <div>
+        <SectionTitle>{t(ep.referral.title)}</SectionTitle>
+        <SectionDesc>{t(ep.referral.desc)}</SectionDesc>
+      </div>
+      <Card>
+        <DataTable
+          headers={["", ""]}
+          rows={[
+            [t(ep.referral.signupBonus), <span key="1"><Badge variant="green">+30 MOM</Badge> {t(ep.referral.each)}</span>],
+            [t(ep.referral.revenueShare), t(ep.referral.revenueShareDesc)],
+            [t(ep.referral.duration), "60 days"],
+            [t(ep.referral.maxInvites), t(ep.referral.maxInvitesDesc)],
+            [t(ep.referral.dailyCap), <Badge key="2" variant="amber">15 MOM/day</Badge>],
+          ]}
+        />
+      </Card>
+      <Card className="border-emerald-200 dark:border-emerald-900/50">
+        <h3 className="text-[14px] font-bold text-foreground mb-2">{t(ep.referral.howItWorks)}</h3>
+        <div className="space-y-2 text-[12px] text-muted-foreground">
+          <p>{t(ep.referral.step1)}: <code className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-[11px]">momment.xyz/?ref=YOUR_CODE</code></p>
+          <p>{t(ep.referral.step2)} <Badge variant="green">+30 MOM</Badge></p>
+          <p>{t(ep.referral.step3)}</p>
+          <p>{t(ep.referral.step4)}</p>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function SpendingTab() {
+  const { dictionary: d, t } = useI18n();
+  const ep = d.economyPage;
+  return (
+    <div className="space-y-6">
+      <SectionTitle>{t(ep.spending.title)}</SectionTitle>
+      <Card>
+        <h3 className="text-[14px] font-bold text-foreground mb-3">{t(ep.spending.costs)}</h3>
+        <DataTable
+          headers={[t(ep.spending.action), t(ep.spending.cost), t(ep.spending.note)]}
+          rows={[
+            [t(ep.spending.oracleAssertion), <Badge key="1" variant="red">-5 MOM</Badge>, t(ep.spending.oracleNote)],
+            [t(ep.spending.premiumPost), t(ep.spending.variable), t(ep.spending.premiumNote)],
+            [t(ep.spending.sponsorship), "Min 100 MOM", t(ep.spending.sponsorshipNote)],
+            [t(ep.spending.adBid), t(ep.spending.variable), t(ep.spending.adBidNote)],
+          ]}
+        />
+      </Card>
+      <Card>
+        <h3 className="text-[14px] font-bold text-foreground mb-3">{t(ep.spending.burnMechanisms)}</h3>
+        <DataTable
+          headers={[t(ep.spending.source), t(ep.spending.burnRate), t(ep.spending.effect)]}
+          rows={[
+            [t(ep.spending.adBid), <Badge key="1" variant="red">100%</Badge>, t(ep.spending.adBidBurn)],
+            [t(ep.spending.sponsorship), <Badge key="2" variant="red">50%</Badge>, t(ep.spending.sponsorBurn)],
+            [t(ep.spending.premiumPost), <Badge key="3" variant="red">15%</Badge>, t(ep.spending.premiumBurn)],
+            [t(ep.spending.withdrawal), <Badge key="4" variant="red">5%</Badge>, t(ep.spending.withdrawBurn)],
+          ]}
+        />
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          {t(ep.spending.burnBenefit)}
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+function WithdrawalTab() {
+  const { dictionary: d, t } = useI18n();
+  const ep = d.economyPage;
+  return (
+    <div className="space-y-6">
+      <div>
+        <SectionTitle>{t(ep.withdrawal.title)}</SectionTitle>
+        <SectionDesc>{t(ep.withdrawal.desc)}</SectionDesc>
+      </div>
+      <Card>
+        <DataTable
+          headers={["", ""]}
+          rows={[
+            [t(ep.withdrawal.minAmount), "$5 USD"],
+            [t(ep.withdrawal.spread), <Badge key="1" variant="amber">5%</Badge>],
+            [t(ep.withdrawal.currency), "MOM → mUSDC (Giwa Sepolia)"],
+          ]}
+        />
+      </Card>
+      <Card className="border-amber-200 dark:border-amber-900/50">
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 mt-0.5 w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center text-[10px] font-bold">!</div>
+          <div className="text-[12px] text-muted-foreground leading-relaxed">
+            <p className="font-bold text-foreground mb-1">{t(ep.withdrawal.denomination)}</p>
+            <p>{t(ep.withdrawal.denominationDesc)}</p>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }

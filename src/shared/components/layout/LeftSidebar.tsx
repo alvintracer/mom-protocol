@@ -19,6 +19,7 @@ import {
   RiLoginBoxLine,
   RiLogoutBoxRLine,
   RiMegaphoneLine,
+  RiCoinLine,
   RiMoreFill
 } from "react-icons/ri";
 
@@ -130,6 +131,13 @@ export function LeftSidebar() {
                       >
                         <RiMegaphoneLine className="size-[22px] shrink-0" />
                         <span className="hidden xl:inline">{t(dictionary.nav.advertise)}</span>
+                      </Link>
+                      <Link
+                        href="/economy"
+                        className="flex items-center justify-center gap-4 rounded-full px-3 py-2.5 text-[16px] font-semibold text-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/50 xl:justify-start xl:px-4"
+                      >
+                        <RiCoinLine className="size-[22px] shrink-0" />
+                        <span className="hidden xl:inline">{t(dictionary.nav.economy)}</span>
                       </Link>
                     </>
                   )}
