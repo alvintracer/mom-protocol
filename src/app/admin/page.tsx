@@ -775,6 +775,7 @@ type AdPlacement = {
   is_active: boolean;
   priority: number;
   notes: string | null;
+  device: string;
   created_at: string;
 };
 
@@ -784,16 +785,26 @@ function AdNetworkPanel() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editCode, setEditCode] = useState("");
+  const [editForm, setEditForm] = useState({
+    unit_name: "",
+    network_name: "",
+    unit_type: "",
+    position: "",
+    priority: 0,
+    notes: "",
+    script_code: "",
+    device: "all",
+  });
   const [showAdd, setShowAdd] = useState(false);
   const [newForm, setNewForm] = useState({
     network_name: "adsterra",
     unit_name: "",
     unit_type: "script",
-    position: "sidebar",
+    position: "sidebar_mid",
     script_code: "",
     priority: 0,
     notes: "",
+    device: "all",
   });
 
   useEffect(() => {
@@ -824,12 +835,26 @@ function AdNetworkPanel() {
     setSaving(false);
   }
 
-  async function saveScript(id: string) {
+  function startEdit(p: AdPlacement) {
+    setEditingId(p.id);
+    setEditForm({
+      unit_name: p.unit_name,
+      network_name: p.network_name,
+      unit_type: p.unit_type,
+      position: p.position,
+      priority: p.priority,
+      notes: p.notes ?? "",
+      script_code: p.script_code,
+      device: p.device ?? "all",
+    });
+  }
+
+  async function saveEdit(id: string) {
     setSaving(true);
     await fetch("/api/admin/ad-placements", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, script_code: editCode }),
+      body: JSON.stringify({ id, ...editForm }),
     });
     setEditingId(null);
     await fetchPlacements();
@@ -857,13 +882,46 @@ function AdNetworkPanel() {
       network_name: "adsterra",
       unit_name: "",
       unit_type: "script",
-      position: "sidebar",
+      position: "sidebar_mid",
       script_code: "",
       priority: 0,
       notes: "",
+      device: "all",
     });
     await fetchPlacements();
     setSaving(false);
+  }
+
+  /* ── Feed interval config ── */
+  const [feedInterval, setFeedInterval] = useState(5);
+  const [boardInterval, setBoardInterval] = useState(10);
+  const [intervalLoaded, setIntervalLoaded] = useState(false);
+  const [intervalSaving, setIntervalSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/site-config?key=feed_ad_interval")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.value) {
+          setFeedInterval(d.value.feed ?? 5);
+          setBoardInterval(d.value.board ?? 10);
+        }
+        setIntervalLoaded(true);
+      })
+      .catch(() => setIntervalLoaded(true));
+  }, []);
+
+  async function saveInterval() {
+    setIntervalSaving(true);
+    await fetch("/api/admin/site-config", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key: "feed_ad_interval",
+        value: { feed: feedInterval, board: boardInterval },
+      }),
+    });
+    setIntervalSaving(false);
   }
 
   if (loading) return <div className="mt-4 h-32 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900/50" />;
@@ -871,6 +929,51 @@ function AdNetworkPanel() {
   return (
     <div className="mt-4 space-y-4">
       {error && <p className="text-sm font-bold text-rose-600">{error}</p>}
+
+      {/* ── Feed Ad Interval Config ── */}
+      {intervalLoaded && (
+        <div className="rounded-xl border border-blue-200/50 bg-blue-50/30 p-4 dark:border-blue-800/30 dark:bg-blue-950/10">
+          <h3 className="text-sm font-black text-foreground">📰 피드 광고 간격 설정</h3>
+          <p className="mt-1 text-[11px] text-muted-foreground">피드에서 몇 개의 포스트마다 광고를 삽입할지 설정합니다.</p>
+          <div className="mt-3 flex flex-wrap items-end gap-4">
+            <label className="block">
+              <span className="text-[11px] font-bold text-foreground">피드뷰 (카드)</span>
+              <div className="mt-1 flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={2}
+                  max={50}
+                  value={feedInterval}
+                  onChange={(e) => setFeedInterval(Number(e.target.value))}
+                  className="h-9 w-20 rounded-lg border border-border bg-white px-2 text-center text-sm font-bold dark:bg-zinc-900"
+                />
+                <span className="text-[11px] text-muted-foreground">개마다</span>
+              </div>
+            </label>
+            <label className="block">
+              <span className="text-[11px] font-bold text-foreground">보드뷰 (리스트)</span>
+              <div className="mt-1 flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={2}
+                  max={50}
+                  value={boardInterval}
+                  onChange={(e) => setBoardInterval(Number(e.target.value))}
+                  className="h-9 w-20 rounded-lg border border-border bg-white px-2 text-center text-sm font-bold dark:bg-zinc-900"
+                />
+                <span className="text-[11px] text-muted-foreground">개마다</span>
+              </div>
+            </label>
+            <button
+              onClick={saveInterval}
+              disabled={intervalSaving}
+              className="h-9 rounded-full bg-blue-600 px-4 text-xs font-black text-white disabled:opacity-50"
+            >
+              {intervalSaving ? "저장 중..." : "간격 저장"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add button */}
       <button
@@ -912,6 +1015,12 @@ function AdNetworkPanel() {
               >
                 <option value="script">Script</option>
                 <option value="native_banner">Native Banner</option>
+                <option value="banner_728x90">Banner 728×90 (Leaderboard)</option>
+                <option value="banner_468x60">Banner 468×60</option>
+                <option value="banner_300x250">Banner 300×250 (Medium Rectangle)</option>
+                <option value="banner_320x50">Banner 320×50 (Mobile)</option>
+                <option value="banner_160x600">Banner 160×600 (Wide Skyscraper)</option>
+                <option value="banner_160x300">Banner 160×300</option>
                 <option value="popunder">Popunder</option>
                 <option value="social_bar">Social Bar</option>
               </select>
@@ -922,11 +1031,26 @@ function AdNetworkPanel() {
                 onChange={(e) => setNewForm({ ...newForm, position: e.target.value })}
                 className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
               >
-                <option value="sidebar">Sidebar</option>
-                <option value="global">Global (전체 페이지)</option>
-                <option value="feed_top">Feed Top</option>
-                <option value="feed_mid">Feed Mid</option>
-                <option value="feed_bottom">Feed Bottom</option>
+                <option value="sidebar_mid">🖥️ 사이드바 중간 (인기토픽 하단)</option>
+                <option value="sidebar_bottom">🖥️ 사이드바 하단</option>
+                <option value="global">🌐 Global (팝업/플로팅, 전체 페이지)</option>
+                <option value="feed_mid">📰 피드 사이 (5번째 포스트 아래)</option>
+                <option value="feed_top">📰 피드 최상단</option>
+                <option value="feed_bottom">📰 피드 하단</option>
+                <option value="post_detail_bottom">📝 포스트 상세 하단</option>
+                <option value="attention_top">🎯 어텐션 페이지 상단</option>
+                <option value="attention_sidebar">🎯 어텐션 사이드바</option>
+              </select>
+            </Field>
+            <Field label="디바이스">
+              <select
+                value={newForm.device}
+                onChange={(e) => setNewForm({ ...newForm, device: e.target.value })}
+                className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+              >
+                <option value="all">📱🖥️ 전체 (PC + 모바일)</option>
+                <option value="desktop">🖥️ PC만</option>
+                <option value="mobile">📱 모바일만</option>
               </select>
             </Field>
             <Field label="우선순위">
@@ -984,10 +1108,19 @@ function AdNetworkPanel() {
                   <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                     {p.position}
                   </span>
+                  {p.device && p.device !== "all" && (
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                      p.device === "mobile"
+                        ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                        : "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400"
+                    }`}>
+                      {p.device === "mobile" ? "📱 Mobile" : "🖥️ Desktop"}
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 text-sm font-black text-foreground">{p.unit_name}</p>
                 <p className="text-[11px] text-muted-foreground">
-                  Type: {p.unit_type} · Priority: {p.priority}
+                  Type: {p.unit_type} · Priority: {p.priority} · {p.network_name} {p.unit_type === "native_banner" ? "Native Banner" : p.unit_type} — {p.position} placement
                   {p.notes && ` · ${p.notes}`}
                 </p>
               </div>
@@ -1004,13 +1137,12 @@ function AdNetworkPanel() {
                     if (editingId === p.id) {
                       setEditingId(null);
                     } else {
-                      setEditingId(p.id);
-                      setEditCode(p.script_code);
+                      startEdit(p);
                     }
                   }}
                   className="text-xs font-bold text-amber-600 hover:underline"
                 >
-                  {editingId === p.id ? "닫기" : "코드 수정"}
+                  {editingId === p.id ? "닫기" : "수정"}
                 </button>
                 <button
                   onClick={() => deletePlacement(p.id)}
@@ -1029,21 +1161,105 @@ function AdNetworkPanel() {
               </pre>
             )}
 
-            {/* Edit mode */}
+            {/* Full edit form */}
             {editingId === p.id && (
-              <div className="mt-3 space-y-2">
-                <textarea
-                  value={editCode}
-                  onChange={(e) => setEditCode(e.target.value)}
-                  rows={5}
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono dark:bg-zinc-900"
-                />
+              <div className="mt-3 space-y-3 rounded-lg border border-amber-200/60 bg-amber-50/30 p-3 dark:border-amber-800/30 dark:bg-amber-950/10">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="유닛 이름">
+                    <input
+                      value={editForm.unit_name}
+                      onChange={(e) => setEditForm({ ...editForm, unit_name: e.target.value })}
+                      className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+                    />
+                  </Field>
+                  <Field label="네트워크">
+                    <select
+                      value={editForm.network_name}
+                      onChange={(e) => setEditForm({ ...editForm, network_name: e.target.value })}
+                      className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+                    >
+                      <option value="adsterra">Adsterra</option>
+                      <option value="adsense">AdSense</option>
+                      <option value="carbon">Carbon Ads</option>
+                      <option value="other">기타</option>
+                    </select>
+                  </Field>
+                  <Field label="유닛 타입">
+                    <select
+                      value={editForm.unit_type}
+                      onChange={(e) => setEditForm({ ...editForm, unit_type: e.target.value })}
+                      className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+                    >
+                      <option value="script">Script</option>
+                      <option value="native_banner">Native Banner</option>
+                      <option value="banner_728x90">Banner 728×90 (Leaderboard)</option>
+                      <option value="banner_468x60">Banner 468×60</option>
+                      <option value="banner_300x250">Banner 300×250 (Medium Rectangle)</option>
+                      <option value="banner_320x50">Banner 320×50 (Mobile)</option>
+                      <option value="banner_160x600">Banner 160×600 (Wide Skyscraper)</option>
+                      <option value="banner_160x300">Banner 160×300</option>
+                      <option value="popunder">Popunder</option>
+                      <option value="social_bar">Social Bar</option>
+                    </select>
+                  </Field>
+                  <Field label="위치">
+                    <select
+                      value={editForm.position}
+                      onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
+                      className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+                    >
+                      <option value="sidebar_mid">🖥️ 사이드바 중간</option>
+                      <option value="sidebar_bottom">🖥️ 사이드바 하단</option>
+                      <option value="global">🌐 Global (팝업/플로팅)</option>
+                      <option value="feed_mid">📰 피드 사이 (5번째 포스트)</option>
+                      <option value="feed_top">📰 피드 최상단</option>
+                      <option value="feed_bottom">📰 피드 하단</option>
+                      <option value="post_detail_bottom">📝 포스트 상세 하단</option>
+                      <option value="attention_top">🎯 어텐션 상단</option>
+                      <option value="attention_sidebar">🎯 어텐션 사이드바</option>
+                    </select>
+                  </Field>
+                  <Field label="디바이스">
+                    <select
+                      value={editForm.device}
+                      onChange={(e) => setEditForm({ ...editForm, device: e.target.value })}
+                      className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+                    >
+                      <option value="all">📱🖥️ 전체</option>
+                      <option value="desktop">🖥️ PC만</option>
+                      <option value="mobile">📱 모바일만</option>
+                    </select>
+                  </Field>
+                  <Field label="우선순위">
+                    <input
+                      type="number"
+                      value={editForm.priority}
+                      onChange={(e) => setEditForm({ ...editForm, priority: Number(e.target.value) })}
+                      className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+                    />
+                  </Field>
+                  <Field label="메모">
+                    <input
+                      value={editForm.notes}
+                      onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                      className="h-9 w-full rounded-lg border border-border bg-white px-3 text-sm font-bold dark:bg-zinc-900"
+                    />
+                  </Field>
+                </div>
+                <Field label="스크립트 코드">
+                  <textarea
+                    value={editForm.script_code}
+                    onChange={(e) => setEditForm({ ...editForm, script_code: e.target.value })}
+                    rows={4}
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono dark:bg-zinc-900"
+                  />
+                </Field>
                 <button
-                  onClick={() => saveScript(p.id)}
+                  onClick={() => saveEdit(p.id)}
                   disabled={saving}
-                  className="h-9 rounded-full bg-foreground px-4 text-xs font-black text-background disabled:opacity-50"
+                  className="h-9 rounded-full bg-foreground px-5 text-xs font-black text-background disabled:opacity-50"
                 >
-                  {saving ? "저장 중..." : "스크립트 저장"}
+                  {saving ? "저장 중..." : "전체 저장"}
                 </button>
               </div>
             )}

@@ -34,6 +34,15 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  manifest: "/manifest.json",
 };
 
 const organizationJsonLd = {
@@ -41,7 +50,7 @@ const organizationJsonLd = {
   "@type": "Organization",
   name: siteName,
   url: publicUrl("/"),
-  logo: publicUrl("/favicon.ico"),
+  logo: publicUrl("/icon-512.png"),
   sameAs: [],
   description: defaultSeoDescription,
 };

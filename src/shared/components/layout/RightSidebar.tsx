@@ -21,7 +21,6 @@ import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
 import { useTranslate } from "@/shared/hooks/useTranslate";
 import { AdSlot } from "@/shared/components/ads/AdSlot";
-import { NetworkAdSlot } from "@/shared/components/ads/NetworkAds";
 import type { Database } from "@/shared/types/database";
 
 type AttentionCluster = Database["public"]["Tables"]["attention_clusters"]["Row"];
@@ -532,6 +531,13 @@ export function RightSidebar() {
             </div>
           </section>
 
+          {/* ── Sidebar Mid Ad Slot (160×300) ── */}
+          <AdSlot
+            position="sidebar_mid"
+            size="rectangle"
+            adsenseSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_SIDEBAR}
+          />
+
           {/* ─── Opinion Leaders ─── */}
           {leaders.length > 0 ? (
             <section className="rounded-2xl border border-border/80 bg-zinc-50/80 dark:bg-zinc-900/40 overflow-hidden">
@@ -592,13 +598,12 @@ export function RightSidebar() {
             <SidebarGlobalMarkets markets={globalMarkets} />
           ) : null}
 
-          {/* ── Sidebar Ad Slot ── */}
+          {/* ── Sidebar Bottom Ad Slot ── */}
           <AdSlot
-            position="sidebar"
+            position="sidebar_bottom"
             size="native"
             adsenseSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_SIDEBAR}
           />
-          <NetworkAdSlot position="sidebar" className="mt-3" />
 
           {/* ─── Footer ─── */}
           <div className="px-4 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-muted-foreground/70">

@@ -98,7 +98,7 @@ export default function OracleDashboardPage() {
   const stats = useMemo(() => {
     const total = assertions.length;
     const pending = assertions.filter(
-      (a) => a.status === "submitted" || a.status === "evidence_captured" || a.status === "llm_verified",
+      (a) => ["submitted", "evidence_captured", "llm_verified", "challenge_period"].includes(a.status),
     ).length;
     const finalized = assertions.filter((a) => a.status === "finalized").length;
     const rejected = assertions.filter((a) => a.status === "rejected").length;
@@ -108,7 +108,7 @@ export default function OracleDashboardPage() {
   // ─── Filtered Assertions ───────────────────
   const filteredAssertions = useMemo(() => {
     if (filter === "all") return assertions;
-    if (filter === "pending") return assertions.filter((a) => ["submitted", "evidence_captured", "llm_verified"].includes(a.status));
+    if (filter === "pending") return assertions.filter((a) => ["submitted", "evidence_captured", "llm_verified", "challenge_period"].includes(a.status));
     if (filter === "finalized") return assertions.filter((a) => a.status === "finalized");
     if (filter === "rejected") return assertions.filter((a) => a.status === "rejected");
     return assertions;
@@ -228,7 +228,7 @@ export default function OracleDashboardPage() {
     [expandedId, loadAssertions, loadDetails],
   );
 
-  const isFinalizable = (a: AssertionRow) => a.status === "llm_verified";
+  const isFinalizable = (a: AssertionRow) => a.status === "llm_verified" || a.status === "challenge_period";
 
   const aioFeatures = [
     {
@@ -632,6 +632,7 @@ function StatusBadge({ status }: { status: string }) {
     submitted: { color: "bg-blue-500/10 text-blue-600", label: t(dictionary.aio.status.submitted) },
     evidence_captured: { color: "bg-cyan-500/10 text-cyan-600", label: t(dictionary.aio.status.evidenceCaptured) },
     llm_verified: { color: "bg-indigo-500/10 text-indigo-600", label: t(dictionary.aio.status.llmVerified) },
+    challenge_period: { color: "bg-indigo-500/10 text-indigo-600", label: t(dictionary.aio.status.llmVerified) },
     finalized: { color: "bg-emerald-500/10 text-emerald-600", label: t(dictionary.aio.status.finalized) },
     rejected: { color: "bg-rose-500/10 text-rose-600", label: t(dictionary.aio.status.rejected) },
   };

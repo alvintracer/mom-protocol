@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { ThemeToggle } from "@/shared/components/ThemeToggle";
@@ -105,9 +106,22 @@ export function LeftSidebar() {
     <aside className="hidden h-screen shrink-0 border-r border-border bg-background px-3 py-5 lg:sticky lg:top-0 lg:flex lg:flex-col lg:justify-between xl:px-4">
       <div>
         <Link href="/" className="mb-7 flex items-center justify-center px-2 xl:justify-start xl:px-4">
-          <p className="text-[22px] font-black text-foreground tracking-tight">
-            momment.
-          </p>
+          <Image
+            src="/logo-dark.svg"
+            alt="momment."
+            width={132}
+            height={21}
+            className="dark:hidden"
+            priority
+          />
+          <Image
+            src="/logo-light.svg"
+            alt="momment."
+            width={132}
+            height={21}
+            className="hidden dark:block"
+            priority
+          />
         </Link>
 
         <nav className="space-y-0.5">

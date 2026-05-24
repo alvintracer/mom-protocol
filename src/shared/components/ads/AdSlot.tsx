@@ -5,10 +5,11 @@ import { RiAdvertisementLine, RiExternalLinkLine } from "react-icons/ri";
 
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
+import { NetworkScriptRenderer } from "@/shared/components/ads/NetworkAds";
 
 /* ── Types ──────────────────────────────────────────────────── */
 
-type SlotPosition = "feed_top" | "feed_mid" | "feed_bottom" | "sidebar" | "attention_top" | "attention_sidebar";
+type SlotPosition = "feed_top" | "feed_mid" | "feed_bottom" | "sidebar" | "sidebar_mid" | "sidebar_bottom" | "attention_top" | "attention_sidebar" | "post_detail_bottom";
 type SlotSize = "banner" | "rectangle" | "leaderboard" | "native";
 
 type SelfServeAd = {
@@ -52,42 +53,79 @@ const ADSENSE_ENABLED = process.env.NEXT_PUBLIC_ADSENSE_ENABLED === "true";
 export function AdSlot({ position, size = "native", adsenseSlot, clusterId, className = "" }: AdSlotProps) {
   const { dictionary, t } = useI18n();
   const [selfServeAd, setSelfServeAd] = useState<SelfServeAd | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [selfServeLoaded, setSelfServeLoaded] = useState(false);
+  const [networkAd, setNetworkAd] = useState<{ script_code: string } | null>(null);
+  const [networkLoaded, setNetworkLoaded] = useState(false);
   const adRef = useRef<HTMLDivElement>(null);
 
-  // Try to load a self-serve ad from DB
+  // Load self-serve ad
   useEffect(() => {
     let mounted = true;
     const supabase = createClient();
 
     async function loadAd() {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let query = (supabase as any)
-        .from("ad_campaigns")
-        .select("id, title, body, image_url, destination_url, advertiser_name, cta_label")
-        .eq("status", "active")
-        .contains("positions", [position])
-        .lte("starts_at", new Date().toISOString())
-        .or(`ends_at.is.null,ends_at.gte.${new Date().toISOString()}`)
-        .order("priority", { ascending: false })
-        .limit(1);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let query = (supabase as any)
+          .from("ad_campaigns")
+          .select("id, title, body, image_url, destination_url, advertiser_name, cta_label")
+          .eq("status", "active")
+          .contains("positions", [position])
+          .lte("starts_at", new Date().toISOString())
+          .or(`ends_at.is.null,ends_at.gte.${new Date().toISOString()}`)
+          .order("priority", { ascending: false })
+          .limit(1);
 
-      if (clusterId) {
-        // Optionally scope to attention
-        query = query.or(`cluster_id.is.null,cluster_id.eq.${clusterId}`);
+        if (clusterId) {
+          query = query.or(`cluster_id.is.null,cluster_id.eq.${clusterId}`);
+        }
+
+        const { data } = await query;
+
+        if (mounted && data && data.length > 0) {
+          setSelfServeAd(data[0] as SelfServeAd);
+        }
+      } catch {
+        // ad_campaigns table might not exist — that's OK
+      } finally {
+        if (mounted) setSelfServeLoaded(true);
       }
-
-      const { data } = await query;
-
-      if (mounted && data && data.length > 0) {
-        setSelfServeAd(data[0] as SelfServeAd);
-      }
-      if (mounted) setLoaded(true);
     }
 
     loadAd();
     return () => { mounted = false; };
   }, [position, clusterId]);
+
+  // Load network ad independently (parallel) with device targeting
+  useEffect(() => {
+    let mounted = true;
+    const supabase = createClient();
+    const isMobile = window.matchMedia("(max-width: 768px)").matches;
+    const deviceType = isMobile ? "mobile" : "desktop";
+
+    async function loadNetworkAd() {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (supabase as any)
+          .from("ad_network_placements")
+          .select("script_code")
+          .eq("is_active", true)
+          .eq("position", position)
+          .in("device", ["all", deviceType])
+          .order("priority", { ascending: false })
+          .limit(1);
+
+        if (mounted && data && data.length > 0) setNetworkAd(data[0]);
+      } catch {
+        // table might not exist yet
+      } finally {
+        if (mounted) setNetworkLoaded(true);
+      }
+    }
+
+    loadNetworkAd();
+    return () => { mounted = false; };
+  }, [position]);
 
   // Record impression
   useEffect(() => {
@@ -106,7 +144,8 @@ export function AdSlot({ position, size = "native", adsenseSlot, clusterId, clas
       .then(() => {});
   }, [selfServeAd, position, clusterId]);
 
-  if (!loaded) return null;
+  // Wait for both loaders to finish
+  if (!selfServeLoaded && !networkLoaded) return null;
 
   // Priority 1: Self-serve ad
   if (selfServeAd) {
@@ -129,13 +168,13 @@ export function AdSlot({ position, size = "native", adsenseSlot, clusterId, clas
           </div>
 
           {/* Image (if any) */}
-          {selfServeAd.image_url && size !== "native" && (
+          {selfServeAd.image_url && (
             <div className="mt-2 px-3">
               <img
                 src={selfServeAd.image_url}
                 alt={selfServeAd.title}
                 className="w-full rounded-lg object-cover"
-                style={{ maxHeight: size === "banner" ? 80 : 160 }}
+                style={{ maxHeight: size === "banner" ? 80 : 200 }}
               />
             </div>
           )}
@@ -166,7 +205,16 @@ export function AdSlot({ position, size = "native", adsenseSlot, clusterId, clas
     );
   }
 
-  // Priority 2: Google AdSense
+  // Priority 2: Network ad script (Adsterra, etc.)
+  if (networkAd) {
+    return (
+      <div className={className} ref={adRef}>
+        <NetworkScriptRenderer html={networkAd.script_code} />
+      </div>
+    );
+  }
+
+  // Priority 3: Google AdSense
   if (ADSENSE_ENABLED && ADSENSE_CLIENT && adsenseSlot) {
     return (
       <div className={`${className}`} ref={adRef}>

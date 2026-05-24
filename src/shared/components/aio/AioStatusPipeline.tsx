@@ -79,7 +79,7 @@ export function AioStatusPipeline({ status }: { status: AssertionStatus }) {
     status === "rejected" || status === "cancelled"
       ? "llm_verified"
       : (["challenge_period", "challenged", "builder_verification_window", "open_verification_window"] as string[]).includes(status)
-        ? "submitted"
+        ? "llm_verified"
         : status;
   const currentIdx = PIPELINE_STEPS.indexOf(displayStatus as AssertionStatus);
   const isRejected = status === "rejected";

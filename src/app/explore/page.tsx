@@ -9,6 +9,7 @@ import {
   RiBarChart2Line,
   RiCheckboxCircleFill,
   RiCheckboxBlankCircleLine,
+  RiCheckboxCircleLine,
   RiFireLine,
   RiFlashlightLine,
   RiGlobalLine,
@@ -108,7 +109,7 @@ export default function ExplorePage() {
       }
 
       const clusterIds = clusterRows.map((cluster) => cluster.id);
-      const [{ data: sourceRows }, { data: membershipRows }, { data: sponsorRows }] = await Promise.all([
+      const [{ data: sourceRows }, { data: membershipRows }, { data: sponsorRows }, { data: assertionRows }] = await Promise.all([
         supabase
           .from("attention_sources")
           .select("*")
@@ -122,6 +123,12 @@ export default function ExplorePage() {
           .select("cluster_id, sponsor_name, sponsor_logo_url, sponsor_tagline, sponsor_url, sponsor_color")
           .in("cluster_id", clusterIds)
           .eq("status", "active"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("aio_assertions")
+          .select("rule_id, finalized_outcome, status, rule:attention_rules!rule_id(event_id)")
+          .in("status", ["finalized", "challenge_period"])
+          .not("finalized_outcome", "is", null),
       ]);
 
       const sponsorMap = new Map<string, { name: string; logoUrl?: string | null; tagline?: string | null; url: string; color?: string | null }>();
@@ -134,6 +141,28 @@ export default function ExplorePage() {
             url: s.sponsor_url,
             color: s.sponsor_color,
           });
+        }
+      }
+
+      // Build a map of cluster_id -> finalized_outcome
+      // Chain: aio_assertions → attention_rules.event_id → attention_clusters.canonical_event_id
+      const resolvedMap = new Map<string, string>();
+      if (assertionRows) {
+        // Build event_id -> cluster_id map
+        const eventToCluster = new Map<string, string>();
+        for (const c of clusterRows) {
+          if (c.canonical_event_id) {
+            eventToCluster.set(c.canonical_event_id, c.id);
+          }
+        }
+        for (const a of (assertionRows as { rule_id: string; finalized_outcome: string | null; status: string; rule: { event_id: string } | null }[])) {
+          const eventId = a.rule?.event_id;
+          if (eventId && a.finalized_outcome) {
+            const clusterId = eventToCluster.get(eventId);
+            if (clusterId) {
+              resolvedMap.set(clusterId, a.finalized_outcome);
+            }
+          }
         }
       }
 
@@ -154,6 +183,7 @@ export default function ExplorePage() {
             dictionary.explore.awaitingResolution,
             dictionary.explore.daysLeft,
             sponsorMap.get(cluster.id) ?? null,
+            resolvedMap.get(cluster.id) ?? null,
           ),
         ),
       );
@@ -522,6 +552,12 @@ function ExploreAttentionCard({
                 {t(dictionary.explore.breaking)}
               </span>
             ) : null}
+            {attention.resolvedOutcome ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-black text-emerald-600 dark:text-emerald-400">
+                <RiCheckboxCircleLine className="size-3.5" />
+                {attention.resolvedOutcome.toUpperCase()}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -758,6 +794,7 @@ function mapClusterToExploreAttention(
   awaitingResolutionLabel: LocalizedText,
   daysLeftLabel: LocalizedText,
   sponsor?: ExploreAttention["sponsor"],
+  resolvedOutcome?: string | null,
 ): ExploreAttention {
   const sourceNames = Array.from(
     new Set(sources.map((source) => source.source_platform).filter(Boolean)),
@@ -796,6 +833,7 @@ function mapClusterToExploreAttention(
       : liveLabel,
     ruleStatus: sources.some((source) => Boolean(source.rules_text)) ? "ready" : "draft",
     sponsor: sponsor ?? null,
+    resolvedOutcome: resolvedOutcome ?? null,
   };
 }
 

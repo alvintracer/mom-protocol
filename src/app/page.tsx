@@ -71,6 +71,26 @@ function HomeFeed() {
   // Board sort
   const [boardSort, setBoardSort] = useState<BoardSortKey>("latest");
 
+  // Ad interval from site_config
+  const [adInterval, setAdInterval] = useState({ feed: 5, board: 10 });
+  useEffect(() => {
+    const supabase = createClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("site_config")
+      .select("value")
+      .eq("key", "feed_ad_interval")
+      .maybeSingle()
+      .then(({ data }: { data: { value: { feed?: number; board?: number } } | null }) => {
+        if (data?.value) {
+          setAdInterval({
+            feed: data.value.feed ?? 5,
+            board: data.value.board ?? 10,
+          });
+        }
+      });
+  }, []);
+
   const postIds = useMemo(() => posts.map((p) => p.id), [posts]);
   const { getPostBody, getPostTitle } = useContentTranslations(postIds);
 
@@ -537,8 +557,8 @@ function HomeFeed() {
                 currentUserId={authUser?.id ?? null}
                 onRemoved={() => setPosts((prev) => prev.filter((p) => p.id !== post.id))}
               />
-              {/* Insert ad after every 5th post */}
-              {idx === 4 && (
+              {/* Insert ad after every Nth post */}
+              {(idx + 1) % adInterval.feed === 0 && idx > 0 && (
                 <AdSlot position="feed_mid" size="native" adsenseSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_FEED} />
               )}
             </div>
@@ -555,7 +575,7 @@ function HomeFeed() {
                 currentUserId={authUser?.id ?? null}
                 onRemoved={() => setPosts((prev) => prev.filter((p) => p.id !== post.id))}
               />
-              {idx === 9 && (
+              {(idx + 1) % adInterval.board === 0 && idx > 0 && (
                 <AdSlot position="feed_mid" size="native" adsenseSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_FEED} />
               )}
             </div>

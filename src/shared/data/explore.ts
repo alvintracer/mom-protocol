@@ -23,6 +23,7 @@ export type ExploreAttention = {
     url: string;
     color?: string | null;
   } | null;
+  resolvedOutcome?: string | null;
 };
 
 export type ExploreTopic = {

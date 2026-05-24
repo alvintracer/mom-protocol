@@ -55,6 +55,7 @@ const STATUS_ICONS: Record<string, string> = {
   submitted: "[▪]",
   evidence_captured: "[◆]",
   llm_verified: "[✓]",
+  challenge_period: "[✓]",
   finalized: "[●]",
   rejected: "[✗]",
 };
@@ -93,7 +94,7 @@ export default function TerminalOraclePage() {
 
   const stats = useMemo(() => {
     const total = assertions.length;
-    const pending = assertions.filter((a) => ["submitted", "evidence_captured", "llm_verified"].includes(a.status)).length;
+    const pending = assertions.filter((a) => ["submitted", "evidence_captured", "llm_verified", "challenge_period"].includes(a.status)).length;
     const finalized = assertions.filter((a) => a.status === "finalized").length;
     return { total, pending, finalized };
   }, [assertions]);
@@ -263,7 +264,7 @@ export default function TerminalOraclePage() {
                         {/* Meta */}
                         <div className="text-[10px] space-y-0.5">
                           <Row label="ID" value={truncHash(a.id, 16)} />
-                          <Row label="STATUS" value={a.status.toUpperCase()} cls={a.status === "finalized" ? "t-cyan" : a.status === "rejected" ? "t-red" : "t-amber"} />
+                          <Row label="STATUS" value={a.status === "challenge_period" ? "LLM_VERIFIED" : a.status.toUpperCase()} cls={a.status === "finalized" ? "t-cyan" : a.status === "rejected" ? "t-red" : "t-amber"} />
                           <Row label="OUTCOME" value={a.asserted_outcome.toUpperCase()} bold />
                           {a.rule && <Row label="RULE" value={a.rule.question.slice(0, 60)} />}
                           {a.finalized_outcome && <Row label="FINAL" value={`${a.finalized_outcome.toUpperCase()} OK`} cls="t-cyan" bold />}
@@ -275,7 +276,8 @@ export default function TerminalOraclePage() {
                           <div className="flex items-center gap-0 text-[10px]">
                             {["submitted", "evidence_captured", "llm_verified", "finalized"].map((step, idx) => {
                               const order = ["submitted", "evidence_captured", "llm_verified", "finalized"];
-                              const done = order.indexOf(step) <= order.indexOf(a.status) || a.status === "finalized";
+                              const normalizedStatus = a.status === "challenge_period" ? "llm_verified" : a.status;
+                              const done = order.indexOf(step) <= order.indexOf(normalizedStatus) || a.status === "finalized";
                               return (
                                 <span key={step} className="flex items-center">
                                   {idx > 0 && <span className={`mx-0.5 ${done ? "t-bright" : "t-dim"}`} style={done ? { textShadow: "0 0 5px rgba(255,255,255,0.15)" } : {}}>--</span>}

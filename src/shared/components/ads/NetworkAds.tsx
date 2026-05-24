@@ -16,7 +16,7 @@ type NetworkPlacement = {
 
 /**
  * Loads global ad scripts (popunder, social_bar) once per session.
- * Placed in the root layout.
+ * These run page-wide so they are injected directly into the DOM.
  */
 export function GlobalAdScripts() {
   const [scripts, setScripts] = useState<NetworkPlacement[]>([]);
@@ -29,15 +29,19 @@ export function GlobalAdScripts() {
     const supabase = createClient();
 
     async function load() {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
-        .from("ad_network_placements")
-        .select("*")
-        .eq("is_active", true)
-        .eq("position", "global")
-        .order("priority", { ascending: false });
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (supabase as any)
+          .from("ad_network_placements")
+          .select("*")
+          .eq("is_active", true)
+          .eq("position", "global")
+          .order("priority", { ascending: false });
 
-      if (data) setScripts(data);
+        if (data) setScripts(data);
+      } catch {
+        // table might not exist yet
+      }
     }
 
     load();
@@ -48,7 +52,7 @@ export function GlobalAdScripts() {
   return (
     <>
       {scripts.map((s) => (
-        <ScriptInjector key={s.id} html={s.script_code} />
+        <DirectScriptInjector key={s.id} html={s.script_code} />
       ))}
     </>
   );
@@ -65,17 +69,22 @@ export function NetworkAdSlot({ position, className = "" }: { position: string; 
     const supabase = createClient();
 
     async function load() {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
-        .from("ad_network_placements")
-        .select("*")
-        .eq("is_active", true)
-        .eq("position", position)
-        .order("priority", { ascending: false })
-        .limit(1);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (supabase as any)
+          .from("ad_network_placements")
+          .select("*")
+          .eq("is_active", true)
+          .eq("position", position)
+          .order("priority", { ascending: false })
+          .limit(1);
 
-      if (data && data.length > 0) setPlacement(data[0]);
-      setLoaded(true);
+        if (data && data.length > 0) setPlacement(data[0]);
+      } catch {
+        // ignore
+      } finally {
+        setLoaded(true);
+      }
     }
 
     load();
@@ -85,15 +94,117 @@ export function NetworkAdSlot({ position, className = "" }: { position: string; 
 
   return (
     <div className={className}>
-      <ScriptInjector html={placement.script_code} />
+      <NetworkScriptRenderer html={placement.script_code} />
     </div>
   );
 }
 
 /**
- * Safely injects arbitrary HTML (including <script> tags) into the DOM.
+ * Renders ad scripts inside an iframe for complete DOM isolation.
+ * This allows the same ad script to be safely used in multiple positions
+ * without duplicate-ID conflicts or script caching issues.
  */
-function ScriptInjector({ html }: { html: string }) {
+export function NetworkScriptRenderer({ html }: { html: string }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(250);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const srcdoc = `<!DOCTYPE html>
+<html><head>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; background: transparent; }
+  #ad-wrapper {
+    display: flex;
+    justify-content: center;
+    transform-origin: top center;
+  }
+</style>
+</head><body>
+<div id="ad-wrapper">
+${html}
+</div>
+<script>
+  // Auto-scale narrow ads to fill container width + report height
+  function measure() {
+    var wrapper = document.getElementById('ad-wrapper');
+    if (!wrapper) return;
+    // Find the widest child element (the actual ad)
+    var children = wrapper.querySelectorAll('*');
+    var maxW = 0;
+    for (var i = 0; i < children.length; i++) {
+      var w = children[i].offsetWidth;
+      if (w > maxW) maxW = w;
+    }
+    var vw = window.innerWidth;
+    if (maxW > 20 && maxW < vw * 0.95) {
+      // Scale ad to fill the container width
+      var scale = vw / maxW;
+      wrapper.style.transform = 'scale(' + scale + ')';
+      wrapper.style.transformOrigin = 'top center';
+      // Report scaled height
+      var naturalH = wrapper.scrollHeight;
+      var scaledH = Math.ceil(naturalH * scale);
+      window.parent.postMessage({ type: 'ad-resize', height: scaledH }, '*');
+    } else {
+      // No scaling needed, just report height
+      var h = document.body.scrollHeight || document.documentElement.scrollHeight;
+      if (h > 10) window.parent.postMessage({ type: 'ad-resize', height: h }, '*');
+    }
+  }
+  // Check periodically for async-loaded ads
+  var checks = 0;
+  var interval = setInterval(function() {
+    measure();
+    checks++;
+    if (checks > 20) clearInterval(interval);
+  }, 500);
+  window.addEventListener('load', measure);
+</script>
+</body></html>`;
+
+    iframe.srcdoc = srcdoc;
+  }, [html]);
+
+  // Listen for height messages from the iframe
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.data?.type === "ad-resize" && typeof e.data.height === "number") {
+        // Only accept messages from our iframe
+        if (iframeRef.current && e.source === iframeRef.current.contentWindow) {
+          setHeight(Math.max(50, e.data.height));
+        }
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  return (
+    <iframe
+      ref={iframeRef}
+      style={{
+        width: "100%",
+        height,
+        border: "none",
+        overflow: "hidden",
+        display: "block",
+        background: "transparent",
+      }}
+      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-same-origin"
+      title="Advertisement"
+    />
+  );
+}
+
+/**
+ * Directly injects HTML/scripts into the DOM (used for global scripts like popunder/social bar).
+ * These don't need isolation since they run once per session.
+ */
+function DirectScriptInjector({ html }: { html: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const injectedRef = useRef(false);
 
@@ -105,16 +216,13 @@ function ScriptInjector({ html }: { html: string }) {
     const temp = document.createElement("div");
     temp.innerHTML = html;
 
-    // Move all children (including text nodes)
     Array.from(temp.childNodes).forEach((node) => {
       if (node.nodeName === "SCRIPT") {
         const oldScript = node as HTMLScriptElement;
         const newScript = document.createElement("script");
-        // Copy attributes
         Array.from(oldScript.attributes).forEach((attr) => {
           newScript.setAttribute(attr.name, attr.value);
         });
-        // Copy inline content
         if (oldScript.textContent) {
           newScript.textContent = oldScript.textContent;
         }

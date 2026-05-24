@@ -26,6 +26,7 @@ import { createClient } from "@/shared/lib/supabase/client";
 import { PostMediaGrid } from "@/shared/components/feed/PostMediaGrid";
 import { PostOptionMenu } from "@/shared/components/feed/PostOptionMenu";
 import { BookmarkButton } from "@/shared/components/feed/BookmarkButton";
+import { AdSlot } from "@/shared/components/ads/AdSlot";
 import { useContentTranslations } from "@/shared/hooks/useContentTranslations";
 import type { Database, SupportedLanguage } from "@/shared/types/database";
 
@@ -693,6 +694,9 @@ export default function PostDetailPage({
           </div>
         </div>
       </article>
+
+      {/* Ad slot — post detail bottom */}
+      <AdSlot position="post_detail_bottom" size="native" />
 
       {isQuoteOpen ? (
         <section className="border-b border-border p-4 sm:p-6">

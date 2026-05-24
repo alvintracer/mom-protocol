@@ -2,21 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "admin";
+import {
+  ADMIN_COOKIE_NAME,
+  isValidAdminSession,
+} from "@/shared/lib/admin/session";
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-function isAuthed(cookieStore: ReturnType<typeof cookies>) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const c = cookieStore as any;
-  const val = typeof c.get === "function" ? c.get("admin_session")?.value : undefined;
-  return val === ADMIN_PASSWORD;
+async function requireAdmin() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
+  return isValidAdminSession(token);
 }
 
 // GET: list all placements
 export async function GET() {
-  const cookieStore = cookies();
-  if (!isAuthed(cookieStore)) {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -33,8 +35,7 @@ export async function GET() {
 
 // POST: create new placement
 export async function POST(request: NextRequest) {
-  const cookieStore = cookies();
-  if (!isAuthed(cookieStore)) {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
       is_active: body.is_active ?? true,
       priority: body.priority ?? 0,
       notes: body.notes ?? null,
+      device: body.device ?? "all",
     })
     .select()
     .single();
@@ -62,8 +64,7 @@ export async function POST(request: NextRequest) {
 
 // PATCH: update placement
 export async function PATCH(request: NextRequest) {
-  const cookieStore = cookies();
-  if (!isAuthed(cookieStore)) {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -81,6 +82,7 @@ export async function PATCH(request: NextRequest) {
   if (body.is_active !== undefined) updates.is_active = body.is_active;
   if (body.priority !== undefined) updates.priority = body.priority;
   if (body.notes !== undefined) updates.notes = body.notes;
+  if (body.device !== undefined) updates.device = body.device;
 
   const { data, error } = await supabase
     .from("ad_network_placements")
@@ -95,8 +97,7 @@ export async function PATCH(request: NextRequest) {
 
 // DELETE: remove placement
 export async function DELETE(request: NextRequest) {
-  const cookieStore = cookies();
-  if (!isAuthed(cookieStore)) {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
