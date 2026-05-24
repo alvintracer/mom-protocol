@@ -1,15 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   RiAddLine,
   RiArrowLeftLine,
-  RiCheckboxCircleLine,
   RiCloseLine,
-  RiDownloadCloudLine,
-  RiExternalLinkLine,
-  RiFileList3Line,
   RiGitMergeLine,
   RiGlobalLine,
   RiLinkM,
@@ -54,7 +51,15 @@ type HotPolymarketMarket = {
 };
 
 export default function NewAttentionPage() {
-  const { dictionary, t } = useI18n();
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-background"><div className="size-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /></div>}>
+      <NewAttentionContent />
+    </Suspense>
+  );
+}
+
+function NewAttentionContent() {
+  const { dictionary, t, language } = useI18n();
   const [mode, setMode] = useState<"create" | "import">("import");
   const [question, setQuestion] = useState("");
   const [category, setCategory] = useState<(typeof categories)[number]>("sports");
@@ -68,6 +73,75 @@ export default function NewAttentionPage() {
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error" | "login">("idle");
   const [createdAttentionHref, setCreatedAttentionHref] = useState<string | null>(null);
   const [linkedPolymarket, setLinkedPolymarket] = useState<HotPolymarketMarket | null>(null);
+
+  /* ── Import mode search ── */
+  const [importSearchQuery, setImportSearchQuery] = useState("");
+  const [importSearchResults, setImportSearchResults] = useState<HotPolymarketMarket[]>([]);
+  const [isImportSearching, setIsImportSearching] = useState(false);
+  const importSearchRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  const handleImportSearchChange = useCallback((value: string) => {
+    setImportSearchQuery(value);
+    if (importSearchRef.current) clearTimeout(importSearchRef.current);
+    if (!value.trim() || value.trim().length < 2) {
+      setImportSearchResults([]);
+      setIsImportSearching(false);
+      return;
+    }
+    importSearchRef.current = setTimeout(async () => {
+      setIsImportSearching(true);
+      try {
+        const res = await fetch(`/api/polymarket/search?q=${encodeURIComponent(value.trim())}`);
+        const data = (await res.json()) as { markets?: HotPolymarketMarket[] };
+        let markets = data.markets ?? [];
+        if (language !== "en" && markets.length > 0) {
+          markets = await translateMarketQuestions(markets, language);
+        }
+        setImportSearchResults(markets);
+      } catch {
+        setImportSearchResults([]);
+      } finally {
+        setIsImportSearching(false);
+      }
+    }, 400);
+  }, [language]);
+
+  /* ── Prefill from market detail page query param ── */
+  const searchParams = useSearchParams();
+  const [prefillApplied, setPrefillApplied] = useState(false);
+  useEffect(() => {
+    if (prefillApplied) return;
+    const raw = searchParams.get("prefill");
+    if (!raw) return;
+    try {
+      const data = JSON.parse(raw) as {
+        question?: string;
+        outcomes?: string[];
+        endDate?: string;
+        sourceUrl?: string;
+        platform?: string;
+      };
+      if (data.question) setQuestion(data.question);
+      if (data.outcomes && data.outcomes.length > 0) setCaseOptions(data.outcomes.join("\n"));
+      if (data.endDate) setDeadline(data.endDate.slice(0, 10));
+      if (data.sourceUrl) setSourceLinks(data.sourceUrl);
+      setMode("create");
+      setPrefillApplied(true);
+      // Auto-link as polymarket source
+      if (data.sourceUrl && data.platform) {
+        setLinkedPolymarket({
+          id: data.sourceUrl,
+          question: data.question || "",
+          slug: null,
+          url: data.sourceUrl,
+          outcomes: data.outcomes || ["YES", "NO"],
+          volume: null,
+          endDate: data.endDate || null,
+          platform: (data.platform as HotPolymarketMarket["platform"]) || "polymarket",
+        });
+      }
+    } catch { /* ignore bad prefill */ }
+  }, [searchParams, prefillApplied]);
 
   /* ── Similar attention suggestion state ── */
   type SimilarAttention = {
@@ -155,9 +229,13 @@ export default function NewAttentionPage() {
       try {
         const response = await fetch("/api/polymarket/hot");
         const data = (await response.json()) as { markets?: HotPolymarketMarket[] };
-        if (mounted) {
-          setHotMarkets(data.markets ?? []);
+        if (!mounted) return;
+        let markets = data.markets ?? [];
+        // Translate market questions if user language is not English
+        if (language !== "en" && markets.length > 0) {
+          markets = await translateMarketQuestions(markets, language);
         }
+        setHotMarkets(markets);
       } catch {
         if (mounted) {
           setHotMarkets([]);
@@ -182,11 +260,69 @@ export default function NewAttentionPage() {
     [sourceLinks],
   );
 
-  const importedSources = links.map((link) =>
-    selectedHotMarket?.url === link
-      ? mapHotMarketToImportSource(selectedHotMarket)
-      : parseImportSource(link),
-  );
+  const [importedSources, setImportedSources] = useState<ImportSource[]>([]);
+
+  // Resolve import links asynchronously via API
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolve() {
+      if (links.length === 0) {
+        setImportedSources([]);
+        return;
+      }
+
+      const resolved = await Promise.all(
+        links.map(async (link) => {
+          if (selectedHotMarket?.url === link) {
+            return mapHotMarketToImportSource(selectedHotMarket);
+          }
+          return fetchImportSource(link);
+        }),
+      );
+
+      if (cancelled) return;
+
+      // Translate titles if language is not English
+      let translated = resolved;
+      if (language !== "en" && resolved.length > 0) {
+        try {
+          const separator = " ||| ";
+          const combined = resolved.map((s) => s.title).join(separator);
+          const res = await fetch(
+            `/api/translate?to=${encodeURIComponent(language)}&text=${encodeURIComponent(combined)}`,
+          );
+          const data = (await res.json()) as { translated?: string };
+          if (data.translated && !cancelled) {
+            const parts = data.translated.split(separator).map((s) => s.trim());
+            translated = resolved.map((s, i) => ({
+              ...s,
+              title: parts[i] || s.title,
+            }));
+          }
+        } catch {
+          // fallback: use untranslated
+        }
+      }
+
+      if (!cancelled) {
+        setImportedSources(translated);
+        // Always auto-populate case options from resolved outcomes
+        const firstOutcomes = translated[0]?.outcomes;
+        if (firstOutcomes && firstOutcomes.length > 0) {
+          setCaseOptions(firstOutcomes.join("\n"));
+        }
+        // Auto-populate question from first resolved source title
+        if (translated[0]?.title) {
+          setQuestion(translated[0].title);
+        }
+      }
+    }
+
+    resolve();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [links, selectedHotMarket, language]);
   const firstImportedSource = importedSources[0];
   const displayQuestion =
     question ||
@@ -260,6 +396,11 @@ export default function NewAttentionPage() {
         });
       }
 
+      // Auto-join the attention as creator
+      await supabase.rpc("toggle_attention_membership", {
+        target_attention_cluster_id: data,
+      });
+
       setCreatedAttentionHref(await resolveAttentionHref(supabase, data));
       setStatus("saved");
       return;
@@ -276,6 +417,11 @@ export default function NewAttentionPage() {
       setStatus("error");
       return;
     }
+
+    // Auto-join the attention as creator
+    await supabase.rpc("toggle_attention_membership", {
+      target_attention_cluster_id: importResult.clusterId,
+    });
 
     setCreatedAttentionHref(await resolveAttentionHref(supabase, importResult.clusterId));
     setStatus("saved");
@@ -294,7 +440,7 @@ export default function NewAttentionPage() {
         </div>
       </header>
 
-      <main className="grid gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <main className="mx-auto max-w-2xl space-y-5 px-4 py-5 sm:px-6">
         <section className="space-y-4">
           <div className="grid grid-cols-2 rounded-full border border-border bg-zinc-50 p-1 dark:bg-zinc-900/50">
             <button
@@ -460,62 +606,113 @@ export default function NewAttentionPage() {
                 </div>
               </section>
 
-              <PolymarketSearchPanel
-                onSelect={(market) => {
-                  setLinkedPolymarket(market);
-                  if (!question.trim()) {
-                    setQuestion(market.question);
-                  }
-                  if (caseOptions === "YES\nNO" && market.outcomes.length > 0) {
-                    setCaseOptions(market.outcomes.join("\n"));
-                  }
-                  if (!deadline && market.endDate) {
-                    setDeadline(market.endDate.slice(0, 10));
-                  }
-                }}
-                onRemove={() => setLinkedPolymarket(null)}
-                linkedMarket={linkedPolymarket}
-              />
-
             </>
           ) : (
             <>
-              {hotMarkets.length > 0 ? (
+              {hotMarkets.length > 0 || true ? (
                 <section className="rounded-lg border border-border bg-background p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <h2 className="text-lg font-black text-foreground">
-                        Polymarket 인기 마켓
+                        글로벌 예측시장
                       </h2>
                       <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                        인기 마켓을 momment. 어텐션으로 빠르게 가져옵니다.
+                        예측시장 마켓을 검색하거나 인기 마켓을 어텐션으로 가져옵니다.
                       </p>
                     </div>
                   </div>
-                  <div className="mt-4 grid gap-2">
-                    {hotMarkets.slice(0, 5).map((market) => (
-                      <button
-                        key={market.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedHotMarket(market);
-                          setQuestion(market.question);
-                          setSourceLinks(market.url ?? "");
-                          setCaseOptions(market.outcomes.join("\n"));
-                          setDeadline(market.endDate ? market.endDate.slice(0, 10) : "");
-                        }}
-                        className="rounded-lg border border-border p-3 text-left transition-colors hover:border-blue-500 hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
-                      >
-                        <p className="line-clamp-2 text-sm font-black text-foreground">
-                          {market.question}
-                        </p>
-                        <p className="mt-1 text-xs font-bold text-muted-foreground">
-                          {market.outcomes.join(" · ")}
-                          {market.volume ? ` · Vol ${Math.round(market.volume).toLocaleString()}` : ""}
-                        </p>
-                      </button>
-                    ))}
+
+                  {/* Search input */}
+                  <div className="group relative mt-3">
+                    <RiSearchLine className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground transition-colors group-focus-within:text-blue-500" />
+                    <input
+                      type="text"
+                      value={importSearchQuery}
+                      onChange={(e) => handleImportSearchChange(e.target.value)}
+                      placeholder="키워드로 마켓 검색 (예: bitcoin, AI, election...)"
+                      className="h-10 w-full rounded-lg border border-border bg-zinc-50 pl-10 pr-4 text-sm font-medium outline-none transition-all placeholder:text-muted-foreground focus:border-blue-500 focus:bg-background dark:bg-zinc-900/50"
+                    />
                   </div>
+
+                  {/* Search results */}
+                  {isImportSearching ? (
+                    <div className="mt-3 flex items-center justify-center py-4">
+                      <div className="size-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                      <span className="ml-2 text-xs font-medium text-muted-foreground">검색 중...</span>
+                    </div>
+                  ) : importSearchResults.length > 0 ? (
+                    <div className="mt-3 grid gap-2">
+                      {importSearchResults.map((market) => (
+                        <button
+                          key={market.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedHotMarket(market);
+                            setQuestion(market.question);
+                            setSourceLinks(market.url ?? "");
+                            setCaseOptions(market.outcomes.join("\n"));
+                            setDeadline(market.endDate ? market.endDate.slice(0, 10) : "");
+                            setImportSearchQuery("");
+                            setImportSearchResults([]);
+                          }}
+                          className="rounded-lg border border-border p-3 text-left transition-colors hover:border-blue-500 hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                        >
+                          <p className="line-clamp-2 text-sm font-black text-foreground">
+                            {market.question}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {market.outcomes.slice(0, 6).map((o) => (
+                              <span key={o} className="inline-flex rounded px-1.5 py-0.5 text-[10px] font-black bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                                {o}
+                              </span>
+                            ))}
+                            {market.volume ? (
+                              <span className="text-[10px] font-medium text-muted-foreground">
+                                Vol {Math.round(market.volume).toLocaleString()}
+                              </span>
+                            ) : null}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : importSearchQuery.trim().length >= 2 ? (
+                    <p className="mt-3 py-3 text-center text-sm font-medium text-muted-foreground">
+                      검색 결과가 없습니다.
+                    </p>
+                  ) : hotMarkets.length > 0 ? (
+                    <div className="mt-3 grid gap-2">
+                      {hotMarkets.slice(0, 3).map((market) => (
+                        <button
+                          key={market.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedHotMarket(market);
+                            setQuestion(market.question);
+                            setSourceLinks(market.url ?? "");
+                            setCaseOptions(market.outcomes.join("\n"));
+                            setDeadline(market.endDate ? market.endDate.slice(0, 10) : "");
+                          }}
+                          className="rounded-lg border border-border p-3 text-left transition-colors hover:border-blue-500 hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                        >
+                          <p className="line-clamp-2 text-sm font-black text-foreground">
+                            {market.question}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {market.outcomes.slice(0, 6).map((o) => (
+                              <span key={o} className="inline-flex rounded px-1.5 py-0.5 text-[10px] font-black bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                                {o}
+                              </span>
+                            ))}
+                            {market.volume ? (
+                              <span className="text-[10px] font-medium text-muted-foreground">
+                                Vol {Math.round(market.volume).toLocaleString()}
+                              </span>
+                            ) : null}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
 
@@ -540,6 +737,50 @@ export default function NewAttentionPage() {
                 </section>
               ) : null}
 
+              {/* Editable fields after import */}
+              {(question || importedSources.length > 0) ? (
+                <>
+                  <Field label={t(dictionary.attentionBuilder.questionLabel)}>
+                    <textarea
+                      value={question}
+                      onChange={(event) => setQuestion(event.target.value)}
+                      placeholder={t(dictionary.attentionBuilder.questionPlaceholder)}
+                      rows={2}
+                      className="min-h-16 w-full resize-none rounded-lg border border-border bg-background px-4 py-3 text-[17px] font-semibold leading-7 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-500"
+                    />
+                  </Field>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label={t(dictionary.attentionBuilder.categoryLabel)}>
+                      <CategorySelect
+                        category={category}
+                        setCategory={setCategory}
+                        dictionary={dictionary}
+                        t={t}
+                      />
+                    </Field>
+                    <Field label={t(dictionary.attentionBuilder.deadlineLabel)}>
+                      <input
+                        type="date"
+                        value={deadline}
+                        onChange={(event) => setDeadline(event.target.value)}
+                        className="h-12 w-full rounded-lg border border-border bg-background px-4 text-sm font-bold text-foreground outline-none focus:border-blue-500"
+                      />
+                    </Field>
+                  </div>
+
+                  <Field label={t(dictionary.attentionBuilder.caseOptionsLabel)}>
+                    <textarea
+                      value={caseOptions}
+                      onChange={(event) => setCaseOptions(event.target.value)}
+                      placeholder={t(dictionary.attentionBuilder.caseOptionsPlaceholder)}
+                      rows={3}
+                      className="min-h-20 w-full resize-none rounded-lg border border-border bg-background px-4 py-3 text-sm font-semibold leading-6 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-500"
+                    />
+                  </Field>
+                </>
+              ) : null}
+
             </>
           )}
 
@@ -549,124 +790,87 @@ export default function NewAttentionPage() {
             setSelectedMergeId={setSelectedMergeId}
           />
 
-          <CaptchaGate action="attention_build">
-            {({ captchaToken, isVerified, CaptchaWidget }) => (
-              <>
-                {CaptchaWidget}
-                <button
-                  type="button"
-                  disabled={!canSubmit || status === "saving" || !isVerified}
-                  onClick={handleSubmit}
-                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-5 text-sm font-black text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                >
-                  {mode === "create" ? (
-                    <RiAddLine className="size-5" />
-                  ) : (
-                    <RiDownloadCloudLine className="size-5" />
-                  )}
-                  {mode === "create"
-                    ? t(dictionary.attentionBuilder.createDraft)
-                    : t(dictionary.attentionBuilder.importDraft)}
-                </button>
-              </>
-            )}
-          </CaptchaGate>
-
-          {status === "saved" ? (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold leading-6 text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
-              <p>
-                {mode === "create"
-                  ? t(dictionary.attentionBuilder.created)
-                  : t(dictionary.attentionBuilder.imported)}
-              </p>
-              {createdAttentionHref ? (
-                <Link
-                  href={createdAttentionHref}
-                  className="mt-2 inline-flex text-blue-700 underline underline-offset-4 dark:text-blue-200"
-                >
-                  {t(dictionary.attentionBuilder.openCreatedAttention)}
-                </Link>
-              ) : null}
-            </div>
-          ) : null}
-          {status === "error" || status === "login" ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
-              {status === "login"
-                ? t(dictionary.attentionBuilder.loginRequired)
-                : t(dictionary.attentionBuilder.saveFailed)}
-            </p>
-          ) : null}
         </section>
 
-        <aside className="space-y-4 xl:sticky xl:top-28 xl:self-start">
-          <section className="rounded-lg border border-border bg-background p-4 shadow-sm">
-            <p className="text-sm font-black text-blue-600">
-              {mode === "create"
-                ? t(dictionary.attentionBuilder.previewTitle)
-                : t(dictionary.attentionBuilder.importPreviewTitle)}
-            </p>
-            <h2 className="mt-2 text-xl font-black leading-7 text-foreground">
-              {displayQuestion}
-            </h2>
-            <p className="mt-2 text-sm font-semibold text-muted-foreground">
-              {categoryLabel(category, dictionary, t)}
-            </p>
-
-            <div className="mt-4 space-y-3">
-              <PreviewRow
-                icon={<RiFileList3Line className="size-5" />}
-                label={t(dictionary.attentionBuilder.communityAnchor)}
-                value="momment."
-              />
-              <PreviewRow
-                icon={<RiGlobalLine className="size-5" />}
-                label={t(dictionary.attentionBuilder.unifiedSources)}
-                value={sourceNames.length > 0 ? sourceNames.join(" · ") : "Paste URL"}
-              />
-              {mode === "create" ? (
-                <PreviewRow
-                  icon={<RiListCheck2 className="size-5" />}
-                  label={t(dictionary.attentionBuilder.casePreviewTitle)}
-                  value={supportedOutcomes.join(" · ")}
-                />
-              ) : null}
-              <PreviewRow
-                icon={<RiCheckboxCircleLine className="size-5" />}
-                label={
-                  mode === "create"
-                    ? t(dictionary.attentionBuilder.aioReady)
-                    : t(dictionary.attentionBuilder.importedOracleReady)
-                }
-                value={
-                  mode === "create"
-                    ? t(dictionary.attentionBuilder.aioAfterDeadline)
-                    : firstImportedSource?.oracleType ?? "External oracle"
-                }
-              />
-            </div>
-
-            {links.length > 0 ? (
-              <div className="mt-4 space-y-2 border-t border-border pt-4">
-                {links.map((link) => (
-                  <a
-                    key={link}
-                    href={link}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex min-w-0 items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2 text-xs font-bold text-muted-foreground transition-colors hover:text-blue-600 dark:bg-zinc-900/50"
-                  >
-                    <RiExternalLinkLine className="size-4 shrink-0" />
-                    <span className="truncate">{detectSourceName(link)}</span>
-                  </a>
-                ))}
-              </div>
-            ) : null}
-          </section>
-
-          <p className="rounded-lg border border-border bg-zinc-50 p-4 text-sm font-semibold leading-6 text-muted-foreground dark:bg-zinc-900/50">
-            {t(dictionary.attentionBuilder.noTrading)}
+        {/* ── Preview (compact) ── */}
+        <section className="rounded-lg border border-border bg-background p-3 shadow-sm">
+          <p className="text-xs font-black text-blue-600">
+            {mode === "create"
+              ? t(dictionary.attentionBuilder.previewTitle)
+              : t(dictionary.attentionBuilder.importPreviewTitle)}
           </p>
-        </aside>
+          <h2 className="mt-1 text-base font-black leading-6 text-foreground">
+            {displayQuestion}
+          </h2>
+
+          {/* Outcomes preview */}
+          {(mode === "create" ? supportedOutcomes : firstImportedSource?.outcomes ?? supportedOutcomes).length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {(mode === "create" ? supportedOutcomes : firstImportedSource?.outcomes ?? supportedOutcomes).map((o) => (
+                <span
+                  key={o}
+                  className="inline-flex rounded border border-border px-2 py-0.5 text-[11px] font-bold text-foreground bg-zinc-50 dark:bg-zinc-900/50"
+                >
+                  {o}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-bold text-muted-foreground">
+            <span>{categoryLabel(category, dictionary, t)}</span>
+            <span>·</span>
+            <span>{sourceNames.length > 0 ? sourceNames.join(" · ") : "Paste URL"}</span>
+            {deadline ? <><span>·</span><span>~ {deadline}</span></> : null}
+          </div>
+        </section>
+
+        <p className="rounded-lg border border-border bg-zinc-50 px-3 py-2.5 text-[12px] font-semibold leading-5 text-muted-foreground dark:bg-zinc-900/50">
+          {t(dictionary.attentionBuilder.noTrading)}
+        </p>
+
+        {/* Submit button at the very bottom */}
+        <CaptchaGate action="attention_build">
+          {({ captchaToken, isVerified, CaptchaWidget }) => (
+            <>
+              {CaptchaWidget}
+              <button
+                type="button"
+                disabled={!canSubmit || status === "saving" || !isVerified}
+                onClick={handleSubmit}
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-5 text-sm font-black text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RiAddLine className="size-5" />
+                {t(dictionary.attentionBuilder.createDraft)}
+              </button>
+            </>
+          )}
+        </CaptchaGate>
+
+        {status === "saved" ? (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold leading-6 text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
+            <p>
+              {mode === "create"
+                ? t(dictionary.attentionBuilder.created)
+                : t(dictionary.attentionBuilder.imported)}
+            </p>
+            {createdAttentionHref ? (
+              <Link
+                href={createdAttentionHref}
+                className="mt-2 inline-flex text-blue-700 underline underline-offset-4 dark:text-blue-200"
+              >
+                {t(dictionary.attentionBuilder.openCreatedAttention)}
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
+        {status === "error" || status === "login" ? (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+            {status === "login"
+              ? t(dictionary.attentionBuilder.loginRequired)
+              : t(dictionary.attentionBuilder.saveFailed)}
+          </p>
+        ) : null}
       </main>
     </div>
   );
@@ -813,6 +1017,18 @@ function ImportSourceCard({ source }: { source: ImportSource }) {
           {source.referenceSignal}
         </span>
       </div>
+      {source.outcomes && source.outcomes.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {source.outcomes.map((o) => (
+            <span
+              key={o}
+              className="inline-flex rounded-md border border-border px-2 py-0.5 text-[11px] font-black text-foreground bg-zinc-50 dark:bg-zinc-900/50"
+            >
+              {o}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="mt-3 grid gap-2 sm:grid-cols-3">
         <MiniMetric label="Oracle" value={source.oracleType} />
         <MiniMetric label="Rules" value={source.rulesLabel} />
@@ -872,6 +1088,7 @@ type ImportSource = {
   endsAt: string | null;
   referenceSignal: string;
   referenceSignalValue: number | null;
+  outcomes?: string[];
 };
 
 async function importSources(
@@ -927,70 +1144,70 @@ async function resolveAttentionHref(
   return `/a/${data?.slug || clusterId}`;
 }
 
-function parseImportSource(url: string): ImportSource {
+async function fetchImportSource(url: string): Promise<ImportSource> {
   const platform = detectSourceName(url);
 
-  if (platform === "Polymarket") {
+  try {
+    const res = await fetch(`/api/markets/resolve?url=${encodeURIComponent(url)}`);
+    if (!res.ok) throw new Error("fetch failed");
+
+    const data = (await res.json()) as {
+      platform?: string;
+      title?: string | null;
+      description?: string | null;
+      outcomes?: string[];
+      volume?: number | null;
+      endDate?: string | null;
+      oracleType?: string;
+    };
+
+    const title = data.title || extractSlugFromUrl(url);
+    const outcomes = data.outcomes && data.outcomes.length > 0 ? data.outcomes : ["YES", "NO"];
+    const volumeLabel = data.volume ? `Vol ${Math.round(data.volume).toLocaleString()}` : "Reference";
+    const endsLabel = data.endDate ? data.endDate.slice(0, 10) : "TBD";
+
     return {
       url,
-      platform,
-      title: "Korean baseball championship winner",
-      description: "Polymarket reference source imported into momment.",
-      oracleType: "UMA reference",
+      platform: data.platform || platform,
+      title,
+      description: data.description || `${data.platform || platform} reference source imported into momment.`,
+      oracleType: data.oracleType || "Source reference",
       rulesLabel: "Source rules",
-      rulesText: "Resolve according to the external source rules and referenced oracle metadata.",
-      endsLabel: "2026.11",
-      endsAt: "2026-11-30T00:00:00+09:00",
-      referenceSignal: "YES 64%",
-      referenceSignalValue: 64,
+      rulesText: `Imported outcomes: ${outcomes.join(", ")}`,
+      endsLabel,
+      endsAt: data.endDate || null,
+      referenceSignal: volumeLabel,
+      referenceSignalValue: data.volume || null,
+      outcomes,
     };
-  }
-
-  if (platform === "Kalshi") {
+  } catch {
     return {
       url,
       platform,
-      title: "Korean baseball championship winner",
-      description: "Kalshi reference source imported into momment.",
-      oracleType: "Kalshi settlement",
-      rulesLabel: "Contract rules",
-      rulesText: "Resolve according to the external contract rules and settlement source.",
-      endsLabel: "2026.11",
-      endsAt: "2026-11-30T00:00:00+09:00",
-      referenceSignal: "62%",
-      referenceSignalValue: 62,
+      title: extractSlugFromUrl(url),
+      description: `${platform} reference source imported into momment.`,
+      oracleType: "Source reference",
+      rulesLabel: "Source rules",
+      rulesText: "Imported external metadata will be reviewed before final resolution.",
+      endsLabel: "TBD",
+      endsAt: null,
+      referenceSignal: "Reference",
+      referenceSignalValue: null,
+      outcomes: ["YES", "NO"],
     };
   }
+}
 
-  if (platform === "Manifold") {
-    return {
-      url,
-      platform,
-      title: "KBO season champion",
-      description: "Manifold reference source imported into momment.",
-      oracleType: "Community resolution",
-      rulesLabel: "Resolution criteria",
-      rulesText: "Resolve according to the imported resolution criteria.",
-      endsLabel: "2026.11",
-      endsAt: "2026-11-30T00:00:00+09:00",
-      referenceSignal: "61%",
-      referenceSignalValue: 61,
-    };
+function extractSlugFromUrl(url: string): string {
+  try {
+    const segments = new URL(url).pathname.split("/").filter(Boolean);
+    // Remove language prefix if present
+    const eventIdx = segments.indexOf("event");
+    const slug = eventIdx >= 0 ? segments[eventIdx + 1] : segments.at(-1);
+    return (slug || "External source").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  } catch {
+    return "External source";
   }
-
-  return {
-    url,
-    platform,
-    title: "External event source",
-    description: "External source imported into momment.",
-    oracleType: "Source reference",
-    rulesLabel: "Imported metadata",
-    rulesText: "Imported external metadata will be reviewed before final resolution.",
-    endsLabel: "TBD",
-    endsAt: null,
-    referenceSignal: "Reference",
-    referenceSignalValue: null,
-  };
 }
 
 function mapHotMarketToImportSource(market: HotPolymarketMarket): ImportSource {
@@ -1019,6 +1236,7 @@ function mapHotMarketToImportSource(market: HotPolymarketMarket): ImportSource {
     endsAt: market.endDate,
     referenceSignal: market.volume ? `Vol ${Math.round(market.volume).toLocaleString()}` : "Hot",
     referenceSignalValue: null,
+    outcomes: market.outcomes,
   };
 }
 
@@ -1265,5 +1483,35 @@ function platformBadgeClass(platform?: string) {
       return "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400";
     default:
       return "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400";
+  }
+}
+
+/**
+ * Batch-translate market question texts via /api/translate.
+ * Combines all questions into a single request using a separator.
+ */
+async function translateMarketQuestions(
+  markets: HotPolymarketMarket[],
+  targetLang: string,
+): Promise<HotPolymarketMarket[]> {
+  if (markets.length === 0) return markets;
+
+  try {
+    // Batch: join all questions with a separator unlikely to appear in text
+    const separator = " ||| ";
+    const combined = markets.map((m) => m.question).join(separator);
+    const res = await fetch(
+      `/api/translate?to=${encodeURIComponent(targetLang)}&text=${encodeURIComponent(combined)}`,
+    );
+    const data = (await res.json()) as { translated?: string };
+    if (!data.translated) return markets;
+
+    const translated = data.translated.split(separator).map((s) => s.trim());
+    return markets.map((m, i) => ({
+      ...m,
+      question: translated[i] || m.question,
+    }));
+  } catch {
+    return markets;
   }
 }

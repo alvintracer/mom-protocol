@@ -501,6 +501,8 @@ export type Database = {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          avatar_url: string | null;
+          cover_url: string | null;
         };
         Insert: {
           id?: string;
@@ -518,6 +520,8 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          avatar_url?: string | null;
+          cover_url?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["attention_clusters"]["Insert"]>;
         Relationships: [];

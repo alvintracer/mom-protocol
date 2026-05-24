@@ -8,35 +8,7 @@ export type PolymarketHotMarket = {
   endDate: string | null;
 };
 
-const fallbackMarkets: PolymarketHotMarket[] = [
-  {
-    id: "fallback-kbo",
-    question: "Who will win the Korean baseball championship?",
-    slug: "kbo-champion",
-    url: null,
-    outcomes: ["Hanwha", "KIA", "Samsung", "Doosan", "LG", "NC", "Other"],
-    volume: 760000,
-    endDate: "2026-11-30T00:00:00Z",
-  },
-  {
-    id: "fallback-btc",
-    question: "Will BTC exceed 120K by June 2026?",
-    slug: "btc-120k-june",
-    url: null,
-    outcomes: ["YES", "NO"],
-    volume: 680000,
-    endDate: "2026-06-30T00:00:00Z",
-  },
-  {
-    id: "fallback-fomc",
-    question: "Will rates remain unchanged after the next FOMC?",
-    slug: "fomc-hold",
-    url: null,
-    outcomes: ["YES", "NO"],
-    volume: 520000,
-    endDate: "2026-06-30T00:00:00Z",
-  },
-];
+const fallbackMarkets: PolymarketHotMarket[] = [];
 
 export async function GET() {
   try {

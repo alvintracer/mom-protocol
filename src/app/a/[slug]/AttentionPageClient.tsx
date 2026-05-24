@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   RiAddLine,
+  RiCameraLine,
+  RiDeleteBinLine,
   RiExternalLinkLine,
   RiGlobalLine,
   RiMegaphoneLine,
@@ -26,7 +28,6 @@ import {
 } from "@/shared/components/attention/AttentionMonetization";
 import { PageSkeleton } from "@/shared/components/ui/LoadingStates";
 import { PredictionWidget } from "@/shared/components/prediction/PredictionWidget";
-import { exploreAttentions as fallbackExploreAttentions } from "@/shared/data/explore";
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
 import { useContentTranslations } from "@/shared/hooks/useContentTranslations";
@@ -87,42 +88,7 @@ export function AttentionPageClient({ slug }: { slug: string }) {
       setUserId(userData.user?.id ?? null);
 
       if (clusterError || !clusterData) {
-        const fallbackAttention = fallbackExploreAttentions.find(
-          (attention) =>
-            attention.id === lookupSlug || attention.slug === lookupSlug,
-        );
-
-        if (!fallbackAttention) {
-          setStatus("missing");
-          return;
-        }
-
-        const fallbackTitle = fallbackAttention.title[language] ?? fallbackAttention.title.ko;
-        const fallbackSummary = fallbackAttention.summary[language] ?? fallbackAttention.summary.ko;
-        setCluster({
-          id: fallbackAttention.id,
-          canonical_event_id: null,
-          slug: fallbackAttention.slug || fallbackAttention.id,
-          title: fallbackTitle,
-          description: fallbackSummary,
-          category: fallbackAttention.category,
-          original_language: "ko",
-          status: "active",
-          source_count: fallbackAttention.sourceCount,
-          post_count: fallbackAttention.postCount,
-          comment_count: 0,
-          attention_score: fallbackAttention.attentionScore,
-          created_by: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-        setSources([]);
-        setRule(createFallbackRule(fallbackAttention.id, fallbackTitle, fallbackSummary));
-        setLatestAssertion(null);
-        setPosts([]);
-        setMemberCount(fallbackAttention.participantCount);
-        setHasJoined(false);
-        setStatus("ready");
+        setStatus("missing");
         return;
       }
 
@@ -240,8 +206,64 @@ export function AttentionPageClient({ slug }: { slug: string }) {
     );
   }
 
+  async function handleDeleteAttention() {
+    if (!cluster || !userId || cluster.created_by !== userId) return;
+    const confirmed = window.confirm("이 어텐션을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.");
+    if (!confirmed) return;
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("attention_clusters")
+      .delete()
+      .eq("id", cluster.id);
+
+    if (!error) {
+      window.location.href = "/explore";
+    } else {
+      alert("삭제에 실패했습니다: " + error.message);
+    }
+  }
+
   // Track page views & dwell time (must be called before early returns to maintain hook order)
   usePageViewTracker(cluster?.id ?? null);
+
+  const isCreator = Boolean(userId && cluster?.created_by === userId);
+
+  /* ── Image upload ── */
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleImageUpload(file: File, field: "avatar_url" | "cover_url") {
+    if (!cluster) return;
+    const supabase = createClient();
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `attention/${cluster.id}/${field.replace("_url", "")}_${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("post-media")
+      .upload(path, file, { upsert: true });
+
+    if (uploadError) {
+      alert("업로드 실패: " + uploadError.message);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("post-media").getPublicUrl(path);
+    const publicUrl = urlData.publicUrl;
+
+    const { error: updateError } = await supabase
+      .from("attention_clusters")
+      .update(field === "avatar_url" ? { avatar_url: publicUrl } : { cover_url: publicUrl })
+      .eq("id", cluster.id);
+
+    if (updateError) {
+      alert("저장 실패: " + updateError.message);
+      return;
+    }
+
+    // Refresh cluster data in state
+    setCluster((prev) => prev ? { ...prev, [field]: publicUrl } : prev);
+  }
 
   if (status === "missing") {
     notFound();
@@ -262,15 +284,87 @@ export function AttentionPageClient({ slug }: { slug: string }) {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <div className="h-28 bg-[linear-gradient(135deg,#2563eb_0%,#0f172a_55%,#334155_100%)] sm:h-40" />
+      {/* Cover image */}
+      <div
+        className="relative h-28 sm:h-40 bg-cover bg-center"
+        style={
+          cluster.cover_url
+            ? { backgroundImage: `url(${cluster.cover_url})` }
+            : { background: "linear-gradient(135deg,#2563eb 0%,#0f172a 55%,#334155 100%)" }
+        }
+      >
+        {isCreator ? (
+          <>
+            <button
+              onClick={() => coverInputRef.current?.click()}
+              className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1.5 text-[11px] font-bold text-white backdrop-blur transition-colors hover:bg-black/70"
+            >
+              <RiCameraLine className="size-3.5" />
+              배경 변경
+            </button>
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageUpload(file, "cover_url");
+                e.target.value = "";
+              }}
+            />
+          </>
+        ) : null}
+      </div>
 
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
         <div className="-mt-10 flex items-end justify-between gap-4 sm:-mt-12">
-          <div className="flex size-20 items-center justify-center rounded-2xl border border-border/80 bg-background text-3xl font-black text-blue-600 shadow-md sm:size-24">
-            a/
+          {/* Avatar */}
+          <div className="relative">
+            {cluster.avatar_url ? (
+              <img
+                src={cluster.avatar_url}
+                alt={cluster.title}
+                className="size-20 rounded-2xl border border-border/80 bg-background object-cover shadow-md sm:size-24"
+              />
+            ) : (
+              <div className="flex size-20 items-center justify-center rounded-2xl border border-border/80 bg-background text-3xl font-black text-blue-600 shadow-md sm:size-24">
+                a/
+              </div>
+            )}
+            {isCreator ? (
+              <>
+                <button
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full bg-blue-600 text-white shadow-md transition-colors hover:bg-blue-700"
+                >
+                  <RiCameraLine className="size-3.5" />
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImageUpload(file, "avatar_url");
+                    e.target.value = "";
+                  }}
+                />
+              </>
+            ) : null}
           </div>
           <div className="flex items-center gap-2 pb-1">
             <BookmarkButton targetType="attention" targetId={cluster.id} variant="icon" />
+            {isCreator ? (
+              <button
+                onClick={handleDeleteAttention}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-red-200 bg-background px-4 text-sm font-black text-red-500 transition-colors hover:bg-red-50 hover:border-red-400 dark:border-red-500/30 dark:hover:bg-red-500/10"
+              >
+                <RiDeleteBinLine className="size-4" />
+                삭제
+              </button>
+            ) : null}
             <button
               onClick={handleToggleJoin}
               disabled={isTogglingJoin}

@@ -124,32 +124,6 @@ export function RightSidebar() {
             setAttentionRules(rulesMap);
           }
         }
-      } else if (mounted) {
-        // Fallback to explore mock attentions
-        const fallback: AttentionCluster[] = exploreAttentions.slice(0, 5).map((ea) => ({
-          id: ea.id,
-          canonical_event_id: null,
-          slug: ea.slug || ea.id,
-          title: ea.title[language] ?? ea.title.ko,
-          description: ea.summary[language] ?? ea.summary.ko,
-          category: ea.category,
-          original_language: "ko" as const,
-          status: "active" as const,
-          source_count: ea.sourceCount,
-          post_count: ea.postCount,
-          comment_count: 0,
-          attention_score: ea.attentionScore,
-          created_by: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }));
-        setAttentions(fallback);
-        // Mock rules from explore topics
-        const mockRulesMap: Record<string, string[]> = {};
-        for (const ea of exploreAttentions.slice(0, 5)) {
-          mockRulesMap[ea.id] = ["YES", "NO"];
-        }
-        setAttentionRules(mockRulesMap);
       }
 
       /* ── Topics ── */
@@ -306,7 +280,7 @@ export function RightSidebar() {
   /* ─── Display data ─── */
   const displayTopics = topics.length > 0
     ? topics.map((t) => ({ slug: t.slug, label: t.canonical_label, kind: t.kind }))
-    : exploreTopics.slice(0, 8).map((t) => ({ slug: t.slug, label: t.label, kind: "user_hashtag" as const }));
+    : [];
 
   const showSearch = query.length > 0;
 
@@ -453,6 +427,7 @@ export function RightSidebar() {
       ) : (
         <>
           {/* ─── Today's Attention ─── */}
+          {attentions.length > 0 ? (
           <section className="rounded-2xl border border-border/80 bg-zinc-50/80 dark:bg-zinc-900/40 overflow-hidden">
             <div className="px-4 pt-4 pb-2">
               <p className="text-lg font-black text-foreground">
@@ -508,8 +483,10 @@ export function RightSidebar() {
               })}
             </div>
           </section>
+          ) : null}
 
           {/* ─── Trending Topics ─── */}
+          {displayTopics.length > 0 ? (
           <section className="rounded-2xl border border-border/80 bg-zinc-50/80 dark:bg-zinc-900/40 overflow-hidden">
             <div className="flex items-center gap-2 px-4 pt-4 pb-2">
               <RiFireLine className="size-4 text-orange-500" />
@@ -530,6 +507,7 @@ export function RightSidebar() {
               ))}
             </div>
           </section>
+          ) : null}
 
           {/* ── Sidebar Mid Ad Slot (160×300) ── */}
           <AdSlot

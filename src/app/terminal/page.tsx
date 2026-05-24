@@ -15,9 +15,20 @@ type AssertionRow = {
   aggregate_confidence: number | null;
   finalized_outcome: string | null;
   created_at: string;
+  proposer_id: string | null;
   proposer: { handle: string | null; display_name: string | null } | null;
   rule: { question: string; title: string } | null;
   event: { title: string } | null;
+};
+
+type RuleRow = {
+  id: string;
+  event_id: string;
+  title: string;
+  question: string;
+  supported_outcomes: string[];
+  bond_amount: number;
+  status: string;
 };
 
 type EvidenceRow = {
@@ -79,6 +90,18 @@ export default function TerminalOraclePage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [clock, setClock] = useState("");
   const [cursorBlink, setCursorBlink] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [finalizingId, setFinalizingId] = useState<string | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  // Submit form state
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
+  const [rules, setRules] = useState<RuleRow[]>([]);
+  const [selectedRuleId, setSelectedRuleId] = useState("");
+  const [submitOutcome, setSubmitOutcome] = useState("");
+  const [submitClaim, setSubmitClaim] = useState("");
+  const [submitUrls, setSubmitUrls] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState<string | null>(null);
 
   useEffect(() => {
     const tick = () => setClock(new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC");
@@ -125,8 +148,96 @@ export default function TerminalOraclePage() {
     setDetailLoading(false);
   }, []);
 
+  // Fetch current user
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUserId(data.user?.id ?? null);
+    });
+  }, []);
+
+  // Load active rules for submit form
+  const loadRules = useCallback(async () => {
+    const supabase = createClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+      .from("attention_rules")
+      .select("id, event_id, title, question, supported_outcomes, bond_amount, status")
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    setRules((data as RuleRow[]) ?? []);
+  }, []);
+
+  const handleFinalize = useCallback(async (assertionId: string, outcome: string) => {
+    setFinalizingId(assertionId);
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).rpc("finalize_aio_assertion", {
+        target_assertion_id: assertionId,
+        outcome: outcome,
+      });
+      await loadAssertions();
+      if (expandedId === assertionId) await loadDetails(assertionId);
+    } finally {
+      setFinalizingId(null);
+    }
+  }, [expandedId, loadAssertions, loadDetails]);
+
+  const handleVerify = useCallback(async (assertionId: string) => {
+    setVerifyingId(assertionId);
+    try {
+      const supabase = createClient();
+      await supabase.functions.invoke("aio-verify", {
+        body: { assertion_id: assertionId },
+      });
+      await loadAssertions();
+      if (expandedId === assertionId) await loadDetails(assertionId);
+    } finally {
+      setVerifyingId(null);
+    }
+  }, [expandedId, loadAssertions, loadDetails]);
+
+  const handleSubmitAssertion = useCallback(async () => {
+    if (!selectedRuleId || !submitOutcome || submitClaim.trim().length < 10) return;
+    setSubmitting(true);
+    setSubmitResult(null);
+    try {
+      const rule = rules.find((r) => r.id === selectedRuleId);
+      if (!rule) throw new Error("rule_not_found");
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: assertionId, error } = await (supabase as any).rpc("submit_aio_assertion", {
+        p_event_id: rule.event_id,
+        p_rule_id: rule.id,
+        p_claim_text: submitClaim.trim(),
+        p_asserted_outcome: submitOutcome,
+        p_original_language: "ko",
+      });
+      if (error) throw new Error(error.message);
+      // Submit evidence URLs if provided
+      const urls = submitUrls.split("\n").map((u) => u.trim()).filter((u) => u.startsWith("http"));
+      if (urls.length > 0 && assertionId) {
+        await supabase.functions.invoke("aio-verify", {
+          body: { assertion_id: assertionId, evidence_urls: urls },
+        });
+      }
+      setSubmitResult(`OK assertion_id=${typeof assertionId === "string" ? assertionId.slice(0, 16) : assertionId}`);
+      setSubmitClaim("");
+      setSubmitOutcome("");
+      setSubmitUrls("");
+      await loadAssertions();
+    } catch (err) {
+      setSubmitResult(`ERR ${err instanceof Error ? err.message : "unknown"}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [selectedRuleId, submitOutcome, submitClaim, submitUrls, rules, loadAssertions]);
+
   useEffect(() => { loadAssertions(); }, [loadAssertions]);
   useEffect(() => { if (expandedId) loadDetails(expandedId); }, [expandedId, loadDetails]);
+  useEffect(() => { if (showSubmitForm) loadRules(); }, [showSubmitForm, loadRules]);
 
   return (
     <div className="px-4 py-5 sm:px-6 ">
@@ -355,12 +466,140 @@ export default function TerminalOraclePage() {
                             </div>
                           )}
                         </div>
+
+                        {/* ─── Action Buttons ─── */}
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {/* Re-verify */}
+                          <button
+                            onClick={() => handleVerify(a.id)}
+                            disabled={verifyingId === a.id}
+                            className="border t-border px-2 py-1 text-[10px] t-blue hover:t-bg2 transition-colors disabled:opacity-40"
+                          >
+                            {verifyingId === a.id ? "[...] VERIFYING" : "[⚡] aio.verify"}
+                          </button>
+                          {/* Finalize — proposer only */}
+                          {(a.status === "llm_verified" || a.status === "challenge_period") &&
+                            currentUserId && a.proposer_id === currentUserId && (
+                            <button
+                              onClick={() => handleFinalize(a.id, a.asserted_outcome)}
+                              disabled={finalizingId === a.id}
+                              className="border t-border px-2 py-1 text-[10px] t-cyan hover:t-bg2 transition-colors disabled:opacity-40"
+                            >
+                              {finalizingId === a.id ? "[...] FINALIZING" : `[●] aio.finalize → ${a.asserted_outcome.toUpperCase()}`}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
                 )}
               </div>
             ))}
+          </div>
+        )}
+      </section>
+
+      {/* ─── Submit Form ─── */}
+      <section className="mt-6">
+        <button
+          onClick={() => setShowSubmitForm((v) => !v)}
+          className="text-[11px] t-bright"
+        >
+          <span className="t-dim">$</span> aio.submit {showSubmitForm ? "--collapse" : "--new"}
+        </button>
+
+        {showSubmitForm && (
+          <div className="mt-2 border t-border p-3 space-y-3">
+            {!currentUserId ? (
+              <div className="text-[10px] t-red">ERR: login required</div>
+            ) : (
+              <>
+                {/* Rule select */}
+                <div>
+                  <div className="text-[10px] t-dim mb-1">RULE_ID (select):</div>
+                  <select
+                    value={selectedRuleId}
+                    onChange={(e) => {
+                      setSelectedRuleId(e.target.value);
+                      setSubmitOutcome("");
+                    }}
+                    className="w-full bg-transparent border t-border text-[10px] t-bright px-2 py-1 outline-none"
+                  >
+                    <option value="">-- select rule --</option>
+                    {rules.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.title || r.question.slice(0, 50)} (bond: {r.bond_amount})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Outcome */}
+                {selectedRuleId && (() => {
+                  const rule = rules.find((r) => r.id === selectedRuleId);
+                  if (!rule) return null;
+                  return (
+                    <div>
+                      <div className="text-[10px] t-dim mb-1">OUTCOME:</div>
+                      <div className="flex gap-2">
+                        {(rule.supported_outcomes as string[])
+                          .filter((o) => o.toLowerCase() !== "ambiguous")
+                          .map((o) => (
+                          <button
+                            key={o}
+                            onClick={() => setSubmitOutcome(o)}
+                            className={`border px-2 py-0.5 text-[10px] font-bold transition-colors ${
+                              submitOutcome === o ? "t-border t-cyan" : "t-border t-dim hover:t-bright"
+                            }`}
+                          >
+                            {o.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Claim */}
+                <div>
+                  <div className="text-[10px] t-dim mb-1">CLAIM_TEXT:</div>
+                  <textarea
+                    value={submitClaim}
+                    onChange={(e) => setSubmitClaim(e.target.value)}
+                    placeholder="assertion claim (min 10 chars)"
+                    rows={2}
+                    className="w-full bg-transparent border t-border text-[10px] t-bright px-2 py-1 outline-none resize-none placeholder:t-dim"
+                  />
+                </div>
+
+                {/* Evidence URLs */}
+                <div>
+                  <div className="text-[10px] t-dim mb-1">EVIDENCE_URLS (one per line):</div>
+                  <textarea
+                    value={submitUrls}
+                    onChange={(e) => setSubmitUrls(e.target.value)}
+                    placeholder="https://..."
+                    rows={2}
+                    className="w-full bg-transparent border t-border text-[10px] t-bright px-2 py-1 outline-none resize-none placeholder:t-dim font-mono"
+                  />
+                </div>
+
+                {/* Submit */}
+                <button
+                  onClick={handleSubmitAssertion}
+                  disabled={submitting || !selectedRuleId || !submitOutcome || submitClaim.trim().length < 10}
+                  className="border t-border px-3 py-1 text-[10px] t-cyan hover:t-bg2 transition-colors disabled:opacity-30"
+                >
+                  {submitting ? "[...] SUBMITTING" : "[►] EXECUTE aio.submit"}
+                </button>
+
+                {submitResult && (
+                  <div className={`text-[10px] ${submitResult.startsWith("OK") ? "t-cyan" : "t-red"}`}>
+                    {submitResult}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </section>

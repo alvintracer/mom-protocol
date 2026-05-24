@@ -650,9 +650,9 @@ export const dictionary = {
       "Muestra el vault de plataforma programado para distribucion mensual el dia 1 y la mezcla de MOM detras de cada Contribution Ratio.",
     ),
     oracleTitle: text(
-      "momment. AIO Oracle 검증 레이어",
-      "momment. AIO Oracle verification layer",
-      "Capa de verificacion Oracle de AIO de momment.",
+      "momment. 오라클 검증자",
+      "momment. Oracle Verifier",
+      "Verificador Oracle de momment.",
     ),
     oracleDesc: text(
       "이벤트 사실, 근거 품질, 플랫폼 정산 데이터를 검증하는 오라클 화면의 mock UI입니다. 외부 결제, 지갑, 온체인 연동은 아직 포함하지 않습니다.",
@@ -919,7 +919,7 @@ export const dictionary = {
     ),
     deadlineLabel: text("검증 기준 시점", "Verification deadline", "Fecha limite de verificacion"),
     previewTitle: text("생성 미리보기", "Creation preview", "Vista previa"),
-    importPreviewTitle: text("가져오기 미리보기", "Import preview", "Vista previa de importacion"),
+    importPreviewTitle: text("미리보기", "Preview", "Vista previa"),
     communityAnchor: text("어텐션 기준점", "Attention anchor", "Ancla de attention"),
     unifiedSources: text("연결된 출처", "Connected sources", "Fuentes conectadas"),
     aioReady: text("AIO 검증 기준 준비", "AIO criteria ready", "Criterios AIO listos"),
@@ -939,7 +939,7 @@ export const dictionary = {
     createNewAttention: text("새 어텐션으로 만들기", "Create as new attention", "Crear como nueva attention"),
     attachToExisting: text("동일 이벤트로 합치기", "Merge same event", "Unir mismo evento"),
     createDraft: text("어텐션 만들기", "Create attention", "Crear attention"),
-    importDraft: text("어텐션 가져오기", "Import attention", "Importar attention"),
+    importDraft: text("어텐션 만들기", "Create attention", "Crear attention"),
     created: text(
       "어텐션이 생성되었습니다.",
       "Attention created.",

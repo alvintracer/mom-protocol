@@ -61,24 +61,7 @@ export function TopicPageClient({ slug }: { slug: string }) {
       }
 
       if (!topicData) {
-        const fallbackTopic = exploreTopics.find((item) => item.slug === slug);
-        const fallbackAttentions = fallbackExploreAttentions.filter((attention) =>
-          attention.topics.some(
-            (item) =>
-              normalizeTopic(item) === slug ||
-              normalizeTopic(item) === normalizeTopic(fallbackTopic?.label ?? slug),
-          ),
-        );
-
-        if (!fallbackTopic && fallbackAttentions.length === 0) {
-          setStatus("missing");
-          return;
-        }
-
-        const view = buildFallbackTopicView(slug, fallbackTopic?.label ?? slug, fallbackAttentions);
-        setTopic(view);
-        setAttentions(fallbackAttentions);
-        setStatus("ready");
+        setStatus("missing");
         return;
       }
 

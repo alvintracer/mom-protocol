@@ -53,9 +53,7 @@ type CategoryKey = (typeof categoryKeys)[number];
 export default function ExplorePage() {
   const { dictionary, t } = useI18n();
   const router = useRouter();
-  const [attentions, setAttentions] = useState<ExploreAttention[]>(
-    fallbackExploreAttentions,
-  );
+  const [attentions, setAttentions] = useState<ExploreAttention[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -102,7 +100,7 @@ export default function ExplorePage() {
       }
 
       if (clusterError || !clusterRows || clusterRows.length === 0) {
-        setAttentions(fallbackExploreAttentions);
+        setAttentions([]);
         setIsLoading(false);
         return;
       }

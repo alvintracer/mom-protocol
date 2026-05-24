@@ -41,6 +41,7 @@ type AssertionRow = {
   aggregate_confidence: number | null;
   finalized_outcome: string | null;
   created_at: string;
+  proposer_id: string | null;
   proposer: { handle: string | null; display_name: string | null } | null;
   rule: { question: string; title: string } | null;
   event: { title: string } | null;
@@ -93,6 +94,15 @@ export default function OracleDashboardPage() {
   const [showVerifierRewards, setShowVerifierRewards] = useState(false);
   const [filter, setFilter] = useState<"all" | "pending" | "finalized" | "rejected">("all");
   const [finalizingIds, setFinalizingIds] = useState<Set<string>>(new Set());
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Fetch current user
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUserId(data.user?.id ?? null);
+    });
+  }, []);
 
   // ─── Stats ─────────────────────────────────
   const stats = useMemo(() => {
@@ -228,7 +238,10 @@ export default function OracleDashboardPage() {
     [expandedId, loadAssertions, loadDetails],
   );
 
-  const isFinalizable = (a: AssertionRow) => a.status === "llm_verified" || a.status === "challenge_period";
+  const isFinalizable = (a: AssertionRow) =>
+    (a.status === "llm_verified" || a.status === "challenge_period") &&
+    currentUserId != null &&
+    a.proposer_id === currentUserId;
 
   const aioFeatures = [
     {

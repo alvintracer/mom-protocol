@@ -46,8 +46,18 @@ export async function GET(request: Request) {
     r.status === "fulfilled" ? r.value : [],
   );
 
-  // Sort by volume descending (nulls last)
-  markets.sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0));
+  // Score by relevance: title match + volume
+  const lowerQ = query.toLowerCase();
+  markets.sort((a, b) => {
+    const aTitle = a.question.toLowerCase();
+    const bTitle = b.question.toLowerCase();
+    // Exact keyword match in title gets priority
+    const aMatch = aTitle.includes(lowerQ) ? 1 : 0;
+    const bMatch = bTitle.includes(lowerQ) ? 1 : 0;
+    if (aMatch !== bMatch) return bMatch - aMatch;
+    // Then by volume
+    return (b.volume ?? 0) - (a.volume ?? 0);
+  });
 
   return Response.json({
     markets: markets.slice(0, 15),
@@ -183,19 +193,19 @@ async function searchKalshi(query: string): Promise<UnifiedMarket[]> {
     if (!Array.isArray(data.events)) return [];
 
     // Client-side text filter since Kalshi API doesn't have a search param
-    const lowerQuery = query.toLowerCase();
+    const queryWords = query.toLowerCase().split(/\s+/).filter(Boolean);
     const matched = data.events.filter((event) => {
       if (!event || typeof event !== "object") return false;
       const e = event as Record<string, unknown>;
       const title = str(e.title)?.toLowerCase() ?? "";
-      const category = str(e.category)?.toLowerCase() ?? "";
-      return title.includes(lowerQuery) || category.includes(lowerQuery);
+      // Every query word must appear in the title
+      return queryWords.every((w) => title.includes(w));
     });
 
     return matched
       .map((event) => mapKalshiEvent(event))
       .filter((m): m is UnifiedMarket => m !== null)
-      .slice(0, 6);
+      .slice(0, 4);
   } catch {
     return [];
   }
