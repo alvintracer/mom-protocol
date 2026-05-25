@@ -55,6 +55,7 @@ export function RightSidebar() {
   /* ─── Live data state ─── */
   const [attentions, setAttentions] = useState<AttentionCluster[]>([]);
   const [attentionRules, setAttentionRules] = useState<Record<string, string[]>>({});
+  const [attentionTitleMap, setAttentionTitleMap] = useState<Record<string, string>>({});
   const [topics, setTopics] = useState<TopicRow[]>([]);
   const [leaders, setLeaders] = useState<Profile[]>([]);
   const [recommendedAttentions, setRecommendedAttentions] = useState<AttentionCluster[]>([]);
@@ -106,14 +107,15 @@ export function RightSidebar() {
             .select("event_id, supported_outcomes")
             .in("event_id", eventIds);
 
-          if (mounted && rulesData) {
-            // Map event_id -> cluster_id for reverse lookup
-            const eventToCluster: Record<string, string> = {};
-            for (const c of clusterData) {
-              if (c.canonical_event_id) {
-                eventToCluster[c.canonical_event_id] = c.id;
-              }
+          // Map event_id -> cluster_id for reverse lookup
+          const eventToCluster: Record<string, string> = {};
+          for (const c of clusterData) {
+            if (c.canonical_event_id) {
+              eventToCluster[c.canonical_event_id] = c.id;
             }
+          }
+
+          if (mounted && rulesData) {
             const rulesMap: Record<string, string[]> = {};
             for (const rule of rulesData) {
               const clusterId = eventToCluster[rule.event_id];
@@ -123,18 +125,59 @@ export function RightSidebar() {
             }
             setAttentionRules(rulesMap);
           }
+
+          // Fetch translations for sidebar titles
+          const { data: txRows } = await supabase
+            .from("event_translations")
+            .select("event_id, language, title")
+            .in("event_id", eventIds)
+            .eq("language", language)
+            .eq("status", "translated");
+
+          if (mounted && txRows) {
+            const titleMap: Record<string, string> = {};
+            for (const tx of txRows) {
+              const clusterId = eventToCluster[tx.event_id];
+              if (clusterId && tx.title) {
+                titleMap[clusterId] = tx.title;
+              }
+            }
+            setAttentionTitleMap(titleMap);
+          }
         }
       }
 
-      /* ── Topics ── */
-      const { data: topicData } = await supabase
-        .from("topics")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(8);
+      /* ── Topics (trending by score) ── */
+      // Try trend-based ordering first
+      const { data: trendData } = await supabase
+        .from("topic_trend_snapshots")
+        .select("topic_id, score, topics(id, slug, kind, canonical_label, labels, description, created_by, created_at, updated_at)")
+        .order("score", { ascending: false })
+        .limit(12);
 
-      if (mounted && topicData && topicData.length > 0) {
-        setTopics(topicData);
+      if (mounted && trendData && trendData.length > 0) {
+        // Deduplicate by topic_id (keep highest score)
+        const seen = new Set<string>();
+        const uniqueTopics: TopicRow[] = [];
+        for (const row of trendData) {
+          if (row.topics && !seen.has(row.topic_id)) {
+            seen.add(row.topic_id);
+            uniqueTopics.push(row.topics as unknown as TopicRow);
+          }
+        }
+        if (uniqueTopics.length > 0) {
+          setTopics(uniqueTopics.slice(0, 8));
+        }
+      } else {
+        // Fallback: by created_at
+        const { data: topicData } = await supabase
+          .from("topics")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(8);
+        if (mounted && topicData && topicData.length > 0) {
+          setTopics(topicData);
+        }
       }
       // fallback topics stay empty; we show exploreTopics as fallback in render
 
@@ -450,7 +493,7 @@ export function RightSidebar() {
                       <RiMoreFill className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                     </div>
                     <p className="mt-0.5 text-[13px] font-bold leading-5 text-foreground line-clamp-2">
-                      {attention.title}
+                      {attentionTitleMap[attention.id] || attention.title}
                     </p>
                     <div className="mt-1 flex items-center gap-2 text-[11px]">
                       <span className="tabular-nums font-medium text-blue-600 dark:text-blue-400">

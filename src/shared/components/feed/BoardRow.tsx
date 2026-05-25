@@ -20,6 +20,7 @@ type BoardRowProps = {
   post: SocialPost;
   linkedEvent: Event | null;
   translatedTitle?: string | null;
+  translatedBody?: string;
   currentUserId?: string | null;
   onRemoved?: () => void;
 };
@@ -28,7 +29,7 @@ type BoardRowProps = {
  * BoardRow — Compact list-style row for board/community view.
  * Inspired by Korean community sites (DCInside, Dogdrip) with modern aesthetics.
  */
-export function BoardRow({ post, linkedEvent, translatedTitle }: BoardRowProps) {
+export function BoardRow({ post, linkedEvent, translatedTitle, translatedBody }: BoardRowProps) {
   const { t } = useI18n();
   const [likeCount, setLikeCount] = useState(post.likeCount);
   const [hasLiked, setHasLiked] = useState(false);
@@ -48,7 +49,7 @@ export function BoardRow({ post, linkedEvent, translatedTitle }: BoardRowProps) 
     [post.id],
   );
 
-  const displayTitle = translatedTitle ?? post.title ?? stripToLine(post.body);
+  const displayTitle = translatedTitle ?? post.title ?? stripToLine(translatedBody ?? post.body);
   const hasMedia = post.mediaItems && post.mediaItems.length > 0;
   const thumbUrl = hasMedia ? post.mediaItems![0].previewUrl : null;
   const isVideo = hasMedia && post.mediaItems![0].type.startsWith("video/");

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChangeEvent, Suspense, useEffect, useMemo, useState } from "react";
 import {
+  RiAddLine,
   RiArrowLeftLine,
   RiAttachment2,
   RiCloseLine,
@@ -94,9 +95,10 @@ function NewPostContent() {
   const [userHandle, setUserHandle] = useState<string | null>(null);
   const [isPinned, setIsPinned] = useState(false);
   // Topic picker
-  const [selectedTopics, setSelectedTopics] = useState<{ slug: string; label: string }[]>([]);
+  const [selectedTopics, setSelectedTopics] = useState<{ slug: string; label: string; isNew?: boolean }[]>([]);
   const [topicQuery, setTopicQuery] = useState("");
   const [topicResults, setTopicResults] = useState<{ slug: string; canonical_label: string; labels: Record<string, string>; kind: string }[]>([]);
+  const [isNormalizingTopic, setIsNormalizingTopic] = useState(false);
 
   const searchParams = useSearchParams();
   const attentionParam = searchParams.get("attention");
@@ -282,22 +284,58 @@ function NewPostContent() {
     let cancelled = false;
     const timer = setTimeout(async () => {
       const supabase = createClient();
-      const q = topicQuery.trim().toLowerCase();
-      const { data } = await supabase
-        .from("topics")
-        .select("slug, canonical_label, labels, kind")
-        .or(`slug.ilike.%${q}%,canonical_label.ilike.%${q}%`)
-        .order("canonical_label")
-        .limit(10);
-      if (!cancelled && data) {
+      const q = topicQuery.trim();
+      // Two parallel queries: slug/canonical + Korean labels
+      const [r1, r2] = await Promise.all([
+        supabase
+          .from("topics")
+          .select("slug, canonical_label, labels, kind")
+          .or(`slug.ilike.%${q}%,canonical_label.ilike.%${q}%`)
+          .order("canonical_label")
+          .limit(10),
+        supabase
+          .from("topics")
+          .select("slug, canonical_label, labels, kind")
+          .filter("labels->>ko", "ilike", `%${q}%`)
+          .limit(10),
+      ]);
+      if (!cancelled) {
+        const seen = new Set<string>();
+        const merged: { slug: string; canonical_label: string; labels: Record<string, string>; kind: string }[] = [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const d of [...(r1.data ?? []), ...(r2.data ?? [])] as any[]) {
+          if (seen.has(d.slug)) continue;
+          seen.add(d.slug);
+          merged.push({ slug: d.slug, canonical_label: d.canonical_label, labels: d.labels ?? {}, kind: d.kind ?? "ai_keyword" });
+        }
         setTopicResults(
-          (data as { slug: string; canonical_label: string; labels: Record<string, string>; kind: string }[])
-            .filter((t) => !selectedTopics.some((s) => s.slug === t.slug)),
+          merged
+            .filter((t) => !selectedTopics.some((s) => s.slug === t.slug))
+            .slice(0, 10),
         );
       }
     }, 200);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [topicQuery, selectedTopics]);
+
+  function handleAddNewTopic(raw: string) {
+    if (selectedTopics.length >= 5) return;
+    const lowerRaw = raw.toLowerCase();
+    // Don't add duplicates
+    if (selectedTopics.some((t) => t.label.toLowerCase() === lowerRaw || t.slug === lowerRaw)) {
+      setTopicQuery("");
+      setTopicResults([]);
+      return;
+    }
+    // Add as a "new" topic — will be normalized in batch at publish time
+    const tempSlug = `_new_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    setSelectedTopics((prev) => [
+      ...prev,
+      { slug: tempSlug, label: raw, isNew: true },
+    ]);
+    setTopicQuery("");
+    setTopicResults([]);
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -546,21 +584,53 @@ function NewPostContent() {
         return;
       }
 
-      await supabase.rpc("enqueue_missing_translations_for_post", {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).rpc("enqueue_missing_translations_for_post", {
         target_post_id: data.id,
       });
 
-      // Insert user-selected topics
+      // Insert user-selected topics (existing + new user-typed ones)
       if (selectedTopics.length > 0) {
-        const { data: topicRows } = await supabase
-          .from("topics")
-          .select("id, slug")
-          .in("slug", selectedTopics.map((t) => t.slug));
+        const existingTopics = selectedTopics.filter((t) => !t.isNew);
+        const newTopics = selectedTopics.filter((t) => t.isNew);
+        const resolvedTopicIds: string[] = [];
 
-        if (topicRows && topicRows.length > 0) {
+        // 1) Resolve existing topic IDs
+        if (existingTopics.length > 0) {
+          const { data: existingRows } = await supabase
+            .from("topics")
+            .select("id, slug")
+            .in("slug", existingTopics.map((t) => t.slug));
+          if (existingRows) {
+            resolvedTopicIds.push(...existingRows.map((r: { id: string }) => r.id));
+          }
+        }
+
+        // 2) Batch-normalize new topics (single GPT call)
+        if (newTopics.length > 0) {
+          try {
+            const normalizeRes = await fetch("/api/topics/normalize", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ rawTopics: newTopics.map((t) => t.label) }),
+            });
+            if (normalizeRes.ok) {
+              const normalizeData = await normalizeRes.json();
+              const normalizedList = normalizeData.topics as { id: string }[] | undefined;
+              if (normalizedList) {
+                resolvedTopicIds.push(...normalizedList.map((t) => t.id));
+              }
+            }
+          } catch {
+            // Normalization failed — skip new topics silently
+          }
+        }
+
+        // 3) Link all resolved topics to the post
+        if (resolvedTopicIds.length > 0) {
           await supabase.from("content_topics").insert(
-            topicRows.map((t: { id: string }) => ({
-              topic_id: t.id,
+            resolvedTopicIds.map((topicId) => ({
+              topic_id: topicId,
               target_type: "post" as const,
               target_id: data.id,
               source: "user" as const,
@@ -570,12 +640,14 @@ function NewPostContent() {
         }
       }
 
-      // Fire-and-forget: LLM auto-tagging
-      fetch("/api/posts/auto-tag", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postId: data.id }),
-      }).catch(() => {});
+      // Fire-and-forget: LLM auto-tagging (only if user didn't manually select topics)
+      if (selectedTopics.length === 0) {
+        fetch("/api/posts/auto-tag", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ postId: data.id }),
+        }).catch(() => {});
+      }
 
       window.localStorage.removeItem("momment.postDraft");
       router.push(`/posts/${data.id}`);
@@ -851,13 +923,21 @@ function NewPostContent() {
                 {selectedTopics.map((topic) => (
                   <span
                     key={topic.slug}
-                    className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-[12px] font-bold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold ${
+                      topic.isNew
+                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                        : "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
+                    }`}
                   >
-                    #{topic.label}
+                    {topic.isNew ? "+ " : "#"}{topic.label}
                     <button
                       type="button"
                       onClick={() => setSelectedTopics((prev) => prev.filter((t) => t.slug !== topic.slug))}
-                      className="ml-0.5 rounded-full p-0.5 hover:bg-blue-200/50 dark:hover:bg-blue-500/20"
+                      className={`ml-0.5 rounded-full p-0.5 ${
+                        topic.isNew
+                          ? "hover:bg-emerald-200/50 dark:hover:bg-emerald-500/20"
+                          : "hover:bg-blue-200/50 dark:hover:bg-blue-500/20"
+                      }`}
                     >
                       <RiCloseLine className="size-3" />
                     </button>
@@ -873,13 +953,19 @@ function NewPostContent() {
                   <input
                     value={topicQuery}
                     onChange={(e) => setTopicQuery(e.target.value)}
-                    placeholder={t({ ko: "토픽 검색...", en: "Search topics...", es: "Buscar temas..." })}
+                    placeholder={t({ ko: "토픽 검색 또는 새로 입력...", en: "Search or type new topic...", es: "Buscar o escribir tema..." })}
                     className="h-9 min-w-0 flex-1 bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && topicQuery.trim().length >= 2) {
+                        e.preventDefault();
+                        handleAddNewTopic(topicQuery.trim());
+                      }
+                    }}
                   />
                 </div>
 
-                {topicResults.length > 0 && (
-                  <div className="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-y-auto rounded-xl border border-border bg-background shadow-lg">
+                {(topicResults.length > 0 || topicQuery.trim().length >= 2) && (
+                  <div className="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-y-auto rounded-xl border border-border bg-background shadow-lg">
                     {topicResults.map((topic) => (
                       <button
                         key={topic.slug}
@@ -899,6 +985,21 @@ function NewPostContent() {
                         <span className="ml-auto text-[10px] font-medium text-muted-foreground">{topic.kind}</span>
                       </button>
                     ))}
+
+                    {/* "Add new topic" button — shown when query doesn't match existing */}
+                    {topicQuery.trim().length >= 2 && (
+                      <button
+                        type="button"
+                        disabled={isNormalizingTopic}
+                        onClick={() => handleAddNewTopic(topicQuery.trim())}
+                        className="flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-left text-sm font-bold text-blue-600 transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-500/5 disabled:opacity-50"
+                      >
+                        <RiAddLine className="size-4" />
+                        <span>
+                          {t({ ko: `"${topicQuery.trim()}" 새 토픽으로 추가`, en: `Add "${topicQuery.trim()}" as new topic`, es: `Agregar "${topicQuery.trim()}" como tema nuevo` })}
+                        </span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

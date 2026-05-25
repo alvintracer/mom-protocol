@@ -31,7 +31,7 @@ function buildAlternates(lang: string, pathname = "") {
 /* ── Localized metadata ───────────────────────────────────── */
 
 const seoTitles: Record<string, string> = {
-  ko: `${siteName} 놓칠 수 없는 순간`,
+  ko: `${siteName} 모멘트, 놓칠 수 없는 순간`,
   en: `${siteName} moments you can't miss`,
   es: `${siteName} momentos que no puedes perderte`,
 };

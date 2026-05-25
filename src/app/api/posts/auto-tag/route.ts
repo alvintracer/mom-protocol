@@ -45,6 +45,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "post_not_found" }, { status: 404 });
     }
 
+    // Skip if user already manually tagged this post
+    const { count: userTagCount } = await supabase
+      .from("content_topics")
+      .select("*", { count: "exact", head: true })
+      .eq("target_id", postId)
+      .eq("target_type", "post")
+      .eq("source", "user");
+
+    if (userTagCount && userTagCount > 0) {
+      await supabase.from("posts").update({ auto_tag_status: "skipped_user_tagged" }).eq("id", postId);
+      return NextResponse.json({ tagged: 0, skipped: "user_tagged" });
+    }
+
     // Strip HTML for analysis if html format
     const plainBody =
       post.content_format === "html"

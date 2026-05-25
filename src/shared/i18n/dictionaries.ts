@@ -17,7 +17,7 @@ export const dictionary = {
   nav: {
     home: text("홈", "Home", "Inicio"),
     events: text("이벤트", "Events", "Eventos"),
-    explore: text("탐색", "Explore", "Explorar"),
+    explore: text("예측", "Predictions", "Predicciones"),
     notifications: text("알림", "Notifications", "Notificaciones"),
     messages: text("메시지", "Messages", "Mensajes"),
     bookmarks: text("북마크", "Bookmarks", "Marcadores"),
@@ -122,7 +122,7 @@ export const dictionary = {
       "A non-cash contribution metric earned through predictions, evidence, discussion, and distribution.",
       "Una metrica de contribucion no canjeable obtenida con predicciones, evidencia, debate y difusion.",
     ),
-    todayAttention: text("오늘의 어텐션", "Today's attention", "Atencion de hoy"),
+    todayAttention: text("오늘의 예측 어텐션", "Today's prediction attentions", "Attentions de prediccion de hoy"),
     topCreators: text("상위 크리에이터", "Top creators", "Creadores principales"),
     trendingTopics: text("인기 토픽", "Trending Topics", "Topicos populares"),
     opinionLeaders: text("오피니언 리더", "Opinion Leaders", "Lideres de opinion"),
@@ -510,6 +510,11 @@ export const dictionary = {
         "Una aserción enviada ya está en el flujo de verificación AIO. Puedes seguir los próximos pasos en la página Oracle.",
       ),
       viewOracle: text("오라클에서 보기", "View in Oracle", "Ver en Oracle"),
+      awaitingSubmission: text(
+        "제출된 오라클이 없습니다. 근거와 함께 검증을 제출하세요.",
+        "No assertion submitted yet. Collect evidence and submit your result.",
+        "Aún no hay envíos. Recopila evidencia y envía tu resultado.",
+      ),
     },
     evidence: {
       title: text("Evidence Lite", "Evidence Lite", "Evidence Lite"),
@@ -812,11 +817,11 @@ export const dictionary = {
     ),
   },
   explore: {
-    title: text("탐색", "Explore", "Explorar"),
+    title: text("예측", "Predictions", "Predicciones"),
     subtitle: text(
-      "속보, 인기 주제, 카테고리별 어텐션을 한 곳에서 탐색하세요.",
-      "Explore breaking attentions, popular topics, and category collections in one place.",
-      "Explora attentions urgentes, temas populares y colecciones por categoria en un solo lugar.",
+      "속보, 인기 주제, 카테고리별 예측 어텐션을 한 곳에서 확인하세요.",
+      "Discover breaking prediction attentions, popular topics, and category collections in one place.",
+      "Descubre attentions de prediccion urgentes, temas populares y colecciones por categoria.",
     ),
     searchPlaceholder: text(
       "어텐션, 키워드, 외부 링크 검색",
@@ -825,9 +830,9 @@ export const dictionary = {
     ),
     breaking: text("속보", "Breaking", "Ultima hora"),
     breakingDesc: text(
-      "지금 가장 빠르게 커지는 어텐션",
-      "Attentions accelerating right now",
-      "Attentions que crecen ahora",
+      "지금 가장 주목 받는 예측 어텐션",
+      "Most watched prediction attentions right now",
+      "Attentions de prediccion mas destacadas ahora",
     ),
     popularTopics: text("인기 주제", "Popular topics", "Temas populares"),
     categories: text("카테고리", "Categories", "Categorias"),
@@ -889,6 +894,19 @@ export const dictionary = {
       "Who will win Korean baseball this year?",
       "Quien ganara el beisbol coreano este ano?",
     ),
+    descriptionLabel: text("설명 (선택)", "Description (optional)", "Descripcion (opcional)"),
+    descriptionPlaceholder: text(
+      "이 어텐션에 대한 배경이나 맥락을 간단히 설명해주세요.",
+      "Briefly describe the context or background of this attention.",
+      "Describe brevemente el contexto de esta attention.",
+    ),
+    topicLabel: text("토픽 태그", "Topic tags", "Etiquetas de topico"),
+    topicPlaceholder: text(
+      "토픽을 검색하거나 새로 추가하세요",
+      "Search or add new topics",
+      "Busca o agrega nuevos topicos",
+    ),
+    topicAdd: text("추가", "Add", "Agregar"),
     categoryLabel: text("카테고리", "Category", "Categoria"),
     sourceLinksLabel: text("외부 출처 링크", "External source links", "Enlaces de fuentes externas"),
     sourceLinksPlaceholder: text(
@@ -1051,9 +1069,9 @@ export const dictionary = {
     ),
     poweredBy: text("데이터 출처", "Powered by", "Fuente de datos"),
     liveData: text("실시간 데이터", "Live data", "Datos en vivo"),
+    sortNewest: text("최신순", "Newest", "Más recientes"),
     sortVolume: text("거래량순", "By Volume", "Por Volumen"),
-    sortNewest: text("최신순", "Newest", "Mas recientes"),
-    sortEndingSoon: text("마감 임박순", "Ending Soon", "Pronto a cerrar"),
+    sortPopular: text("인기순", "Popular", "Populares"),
     allPlatforms: text("전체", "All", "Todos"),
     sidebarTitle: text(
       "글로벌 마켓",
@@ -1160,6 +1178,21 @@ export const dictionary = {
       "로그인 요청을 처리하지 못했습니다.",
       "Could not process the sign-in request.",
       "No se pudo procesar el inicio de sesion.",
+    ),
+    invalidCredentials: text(
+      "이메일 또는 비밀번호가 올바르지 않습니다. 가입하지 않은 이메일이라면 가입하기를 이용해주세요.",
+      "Incorrect email or password. If you haven't signed up, please create an account first.",
+      "Email o contrasena incorrectos. Si no tienes cuenta, registrate primero.",
+    ),
+    notRegistered: text(
+      "가입되지 않은 이메일입니다. 먼저 가입하기를 이용해주세요.",
+      "This email is not registered. Please sign up first.",
+      "Este email no esta registrado. Por favor, registrate primero.",
+    ),
+    otpVerifyFailed: text(
+      "인증번호가 올바르지 않습니다. 다시 확인해주세요.",
+      "Invalid verification code. Please check and try again.",
+      "Codigo de verificacion incorrecto. Revisalo e intentalo de nuevo.",
     ),
     rateLimitError: text(
       "이메일 발송 제한에 걸렸습니다. 1~2분 후 다시 시도하거나, 비밀번호로 로그인해주세요.",

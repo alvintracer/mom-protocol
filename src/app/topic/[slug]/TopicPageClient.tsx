@@ -242,9 +242,21 @@ function TopicAttentionCard({ attention }: { attention: ExploreAttention }) {
       <h3 className="mt-3 line-clamp-2 text-[15px] font-black leading-snug text-foreground">
         {t(attention.title)}
       </h3>
-      <p className="mt-1.5 line-clamp-2 text-[13px] font-semibold leading-5 text-muted-foreground">
-        {t(attention.summary)}
-      </p>
+      {attention.outcomes.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {attention.outcomes.slice(0, 4).map((o) => (
+            <span key={o} className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-black text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{o}</span>
+          ))}
+          {attention.outcomes.length > 4 && (
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-bold text-zinc-500 dark:bg-zinc-800">+{attention.outcomes.length - 4}</span>
+          )}
+        </div>
+      )}
+      {attention.summary ? (
+        <p className="mt-1.5 line-clamp-2 text-[13px] font-semibold leading-5 text-muted-foreground">
+          {t(attention.summary)}
+        </p>
+      ) : null}
       <div className="mt-auto grid grid-cols-3 gap-1.5 pt-4 text-center">
         <SmallMetric label={t(dictionary.explore.energy)} value={attention.attentionScore} />
         <SmallMetric label={t(dictionary.explore.participants)} value={attention.participantCount} />
@@ -315,14 +327,14 @@ function buildFallbackTopicView(
 
 function mapClusterToAttention(
   cluster: AttentionCluster,
-  fallbackSummary: LocalizedText,
+  _fallbackSummary: LocalizedText,
   liveLabel: LocalizedText,
 ): ExploreAttention {
   return {
     id: cluster.id,
     slug: cluster.slug || cluster.id,
     title: localize(cluster.title),
-    summary: cluster.description ? localize(cluster.description) : fallbackSummary,
+    summary: cluster.description ? localize(cluster.description) : null,
     category: normalizeCategory(cluster.category),
     urgency: Number(cluster.attention_score) >= 80 ? "breaking" : "hot",
     referenceSignal: Math.min(99, Math.max(1, Math.round(Number(cluster.attention_score)))),
@@ -332,6 +344,7 @@ function mapClusterToAttention(
     sourceCount: cluster.source_count,
     sources: ["momment."],
     topics: [cluster.category ?? "attention"],
+    outcomes: [],
     endsInLabel: liveLabel,
     ruleStatus: "draft",
   };

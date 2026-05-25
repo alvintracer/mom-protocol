@@ -62,10 +62,14 @@ function NewAttentionContent() {
   const { dictionary, t, language } = useI18n();
   const [mode, setMode] = useState<"create" | "import">("import");
   const [question, setQuestion] = useState("");
+  const [attentionDescription, setAttentionDescription] = useState("");
   const [category, setCategory] = useState<(typeof categories)[number]>("sports");
   const [sourceLinks, setSourceLinks] = useState("");
   const [deadline, setDeadline] = useState("");
   const [caseOptions, setCaseOptions] = useState("YES\nNO");
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [topicInput, setTopicInput] = useState("");
+  const [topicSuggestions, setTopicSuggestions] = useState<{slug: string; label: string}[]>([]);
   const [hotMarkets, setHotMarkets] = useState<HotPolymarketMarket[]>([]);
   const [selectedHotMarket, setSelectedHotMarket] = useState<HotPolymarketMarket | null>(null);
   const [mergeCandidates, setMergeCandidates] = useState<MergeCandidate[]>([]);
@@ -227,7 +231,7 @@ function NewAttentionContent() {
 
     async function loadHotMarkets() {
       try {
-        const response = await fetch("/api/polymarket/hot");
+        const response = await fetch("/api/polymarket/hot?sort=popular");
         const data = (await response.json()) as { markets?: HotPolymarketMarket[] };
         if (!mounted) return;
         let markets = data.markets ?? [];
@@ -357,13 +361,14 @@ function NewAttentionContent() {
     if (mode === "create") {
       const { data, error } = await supabase.rpc("create_native_attention", {
         title: displayQuestion,
-        description: null,
+        description: attentionDescription.trim() || undefined,
         category,
-        resolution_criteria: null,
-        ends_at: deadline || null,
+        resolution_criteria: undefined,
+        ends_at: deadline || undefined,
         original_language: "ko",
-        merge_target_cluster_id: selectedMergeId,
+        merge_target_cluster_id: selectedMergeId ?? undefined,
         supported_outcomes: supportedOutcomes,
+        topic_slugs: selectedTopics,
       });
 
       if (error || !data) {
@@ -374,7 +379,8 @@ function NewAttentionContent() {
       // If a Polymarket market is linked, import it as an external source
       if (linkedPolymarket) {
         const importSource = mapHotMarketToImportSource(linkedPolymarket);
-        await supabase.rpc("import_attention_source", {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).rpc("import_attention_source", {
           source_url: importSource.url,
           source_platform: importSource.platform,
           title: importSource.title,
@@ -382,8 +388,8 @@ function NewAttentionContent() {
           category,
           rules_text: importSource.rulesText,
           oracle_type: importSource.oracleType,
-          resolver_address: null,
-          external_market_id: extractExternalMarketId(importSource.url),
+          resolver_address: undefined,
+          external_market_id: extractExternalMarketId(importSource.url) ?? undefined,
           reference_signal: importSource.referenceSignalValue,
           reference_signal_label: importSource.referenceSignal,
           ends_at: importSource.endsAt,
@@ -483,6 +489,131 @@ function NewAttentionContent() {
                   rows={3}
                   className="min-h-28 w-full resize-none rounded-lg border border-border bg-background px-4 py-3 text-[17px] font-semibold leading-7 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-500"
                 />
+              </Field>
+
+              <Field label={t(dictionary.attentionBuilder.descriptionLabel)}>
+                <textarea
+                  value={attentionDescription}
+                  onChange={(event) => setAttentionDescription(event.target.value)}
+                  placeholder={t(dictionary.attentionBuilder.descriptionPlaceholder)}
+                  rows={2}
+                  className="min-h-[52px] w-full resize-none rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold leading-6 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-500"
+                />
+              </Field>
+
+              {/* ── Topic tags ── */}
+              <Field label={t(dictionary.attentionBuilder.topicLabel)}>
+                <div className="space-y-2">
+                  {selectedTopics.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedTopics.map((slug) => (
+                        <span
+                          key={slug}
+                          className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
+                        >
+                          #{slug}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTopics((prev) => prev.filter((s) => s !== slug))}
+                            className="ml-0.5 text-blue-400 hover:text-red-500"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={topicInput}
+                      onChange={async (event) => {
+                        const val = event.target.value;
+                        setTopicInput(val);
+                        if (val.trim().length >= 1) {
+                          const supabase = createClient();
+                          const q = val.trim();
+                          // Two parallel queries: canonical/slug match + Korean label match
+                          const [r1, r2] = await Promise.all([
+                            supabase
+                              .from("topics")
+                              .select("slug, canonical_label, labels")
+                              .or(`canonical_label.ilike.%${q}%,slug.ilike.%${q}%`)
+                              .limit(6),
+                            supabase
+                              .from("topics")
+                              .select("slug, canonical_label, labels")
+                              .filter("labels->>ko", "ilike", `%${q}%`)
+                              .limit(6),
+                          ]);
+                          // Merge & dedupe
+                          const seen = new Set<string>();
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const merged: {slug: string; label: string}[] = [];
+                          for (const d of [...(r1.data ?? []), ...(r2.data ?? [])]) {
+                            if (seen.has(d.slug)) continue;
+                            seen.add(d.slug);
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const labels = d.labels as any;
+                            merged.push({ slug: d.slug, label: labels?.ko || labels?.en || d.canonical_label });
+                          }
+                          setTopicSuggestions(merged.slice(0, 6));
+                        } else {
+                          setTopicSuggestions([]);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const slug = topicInput.trim().toLowerCase().replace(/[^a-z0-9가-힣]+/g, "-").replace(/^-|-$/g, "");
+                          if (slug && !selectedTopics.includes(slug)) {
+                            setSelectedTopics((prev) => [...prev, slug]);
+                          }
+                          setTopicInput("");
+                          setTopicSuggestions([]);
+                        }
+                      }}
+                      placeholder={t(dictionary.attentionBuilder.topicPlaceholder)}
+                      className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground focus:border-blue-500"
+                    />
+                    {topicSuggestions.length > 0 && topicInput.trim() && (
+                      <div className="absolute left-0 right-0 top-full z-20 mt-1 rounded-lg border border-border bg-background shadow-lg">
+                        {topicSuggestions
+                          .filter((s) => !selectedTopics.includes(s.slug))
+                          .map((s) => (
+                            <button
+                              key={s.slug}
+                              type="button"
+                              onClick={() => {
+                                setSelectedTopics((prev) => [...prev, s.slug]);
+                                setTopicInput("");
+                                setTopicSuggestions([]);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-foreground transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                            >
+                              <span className="text-blue-500">#</span>{s.label}
+                            </button>
+                          ))}
+                        {topicInput.trim() && !topicSuggestions.some((s) => s.slug === topicInput.trim().toLowerCase().replace(/[^a-z0-9가-힣]+/g, "-")) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const slug = topicInput.trim().toLowerCase().replace(/[^a-z0-9가-힣]+/g, "-").replace(/^-|-$/g, "");
+                              if (slug && !selectedTopics.includes(slug)) {
+                                setSelectedTopics((prev) => [...prev, slug]);
+                              }
+                              setTopicInput("");
+                              setTopicSuggestions([]);
+                            }}
+                            className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm font-bold text-blue-600 transition-colors hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                          >
+                            + &quot;{topicInput.trim()}&quot; {t(dictionary.attentionBuilder.topicAdd)}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </Field>
 
               {/* ── Similar Attention Suggestions ── */}
@@ -724,8 +855,8 @@ function NewAttentionContent() {
                     setStatus("idle");
                   }}
                   placeholder={t(dictionary.attentionBuilder.importLinksPlaceholder)}
-                  rows={5}
-                  className="min-h-36 w-full resize-none rounded-lg border border-border bg-background px-4 py-3 text-sm font-semibold leading-6 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-500"
+                  rows={2}
+                  className="min-h-[52px] w-full resize-none rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold leading-6 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-500"
                 />
               </Field>
 
@@ -886,6 +1017,10 @@ function MergeAttentionPanel({
   setSelectedMergeId: (id: string | null) => void;
 }) {
   const { dictionary, t } = useI18n();
+  const [showAll, setShowAll] = useState(false);
+  const MAX_VISIBLE = 3;
+  const visibleCandidates = showAll ? candidates : candidates.slice(0, MAX_VISIBLE);
+  const hasMore = candidates.length > MAX_VISIBLE;
 
   return (
     <section className="rounded-lg border border-border bg-background p-4">
@@ -894,13 +1029,14 @@ function MergeAttentionPanel({
         <h2 className="text-lg font-black text-foreground">
           {t(dictionary.attentionBuilder.mergeCandidates)}
         </h2>
+        <span className="ml-auto text-xs font-bold text-muted-foreground">{candidates.length}</span>
       </div>
       <p className="mt-1 text-sm leading-6 text-muted-foreground">
         {t(dictionary.attentionBuilder.mergeCandidateDesc)}
       </p>
 
       <div className="mt-4 space-y-2">
-        {candidates.map((candidate) => (
+        {visibleCandidates.map((candidate) => (
           <button
             key={candidate.id}
             type="button"
@@ -926,6 +1062,15 @@ function MergeAttentionPanel({
             </div>
           </button>
         ))}
+        {hasMore && (
+          <button
+            type="button"
+            onClick={() => setShowAll(!showAll)}
+            className="w-full rounded-lg border border-dashed border-border py-2 text-[12px] font-bold text-muted-foreground transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
+          >
+            {showAll ? `▲ ${MAX_VISIBLE}개만 보기` : `▼ ${candidates.length - MAX_VISIBLE}개 더 보기`}
+          </button>
+        )}
       </div>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1100,7 +1245,8 @@ async function importSources(
   let lastClusterId: string | null = null;
 
   for (const source of sources) {
-    const { data, error } = await supabase.rpc("import_attention_source", {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc("import_attention_source", {
       source_url: source.url,
       source_platform: source.platform,
       title: source.title,
@@ -1108,8 +1254,8 @@ async function importSources(
       category,
       rules_text: source.rulesText,
       oracle_type: source.oracleType,
-      resolver_address: null,
-      external_market_id: extractExternalMarketId(source.url),
+      resolver_address: undefined,
+      external_market_id: extractExternalMarketId(source.url) ?? undefined,
       reference_signal: source.referenceSignalValue,
       reference_signal_label: source.referenceSignal,
       ends_at: source.endsAt,

@@ -27,7 +27,7 @@ export type TrendingMarket = {
   createdAt?: string | null;
 };
 
-type SortMode = "volume" | "newest" | "ending_soon";
+type SortMode = "newest" | "volume" | "popular";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -80,18 +80,9 @@ function sortMarkets(markets: TrendingMarket[], sort: SortMode) {
         return tb - ta;
       });
       break;
-    case "ending_soon":
-      markets.sort((a, b) => {
-        const ea = a.endDate ? new Date(a.endDate).getTime() : Infinity;
-        const eb = b.endDate ? new Date(b.endDate).getTime() : Infinity;
-        return ea - eb;
-      });
-      // Filter out already-ended markets
-      const now = Date.now();
-      const firstPast = markets.findIndex(
-        (m) => m.endDate && new Date(m.endDate).getTime() < now,
-      );
-      if (firstPast >= 0) markets.splice(firstPast, markets.length);
+    case "popular":
+      // Popular = high volume, but keep platform-native "popular" ordering
+      markets.sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0));
       break;
     case "volume":
     default:
@@ -107,8 +98,9 @@ async function fetchPolymarketEvents(
 ): Promise<TrendingMarket[]> {
   try {
     // Map our sort to Polymarket Gamma API params
-    const orderParam = sort === "newest" ? "startDate" : "volume";
-    const ascParam = sort === "ending_soon" ? "true" : "false";
+    // popular → use num_traders for most-participated markets
+    const orderParam = sort === "newest" ? "startDate" : sort === "popular" ? "num_traders" : "volume";
+    const ascParam = "false";
 
     const response = await fetch(
       `https://gamma-api.polymarket.com/events?active=true&closed=false&limit=${limit}&order=${orderParam}&ascending=${ascParam}`,
@@ -181,12 +173,12 @@ async function fetchManifoldTrending(
   sort: SortMode,
 ): Promise<TrendingMarket[]> {
   try {
-    // Manifold sort options: "liquidity", "newest", "close-date"
+    // Manifold sort options: "liquidity", "newest", "close-date", "score"
     const manifoldSort =
       sort === "newest"
         ? "newest"
-        : sort === "ending_soon"
-          ? "close-date"
+        : sort === "popular"
+          ? "score"
           : "liquidity";
 
     const response = await fetch(

@@ -1,7 +1,7 @@
 {
   "name": "momment.",
   "short_name": "momment.",
-  "description": "놓칠 수 없는 순간",
+  "description": "모멘트, 놓칠 수 없는 순간",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",

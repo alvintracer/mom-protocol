@@ -10,10 +10,15 @@ export type PolymarketHotMarket = {
 
 const fallbackMarkets: PolymarketHotMarket[] = [];
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const sort = searchParams.get("sort");
+    // popular → num_traders (most participants), default → volumeNum
+    const order = sort === "popular" ? "num_traders" : "volumeNum";
+
     const response = await fetch(
-      "https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=12&order=volumeNum&ascending=false",
+      `https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=12&order=${order}&ascending=false`,
       { next: { revalidate: 300 } },
     );
 

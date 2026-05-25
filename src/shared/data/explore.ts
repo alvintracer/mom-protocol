@@ -4,7 +4,7 @@ export type ExploreAttention = {
   id: string;
   slug?: string | null;
   title: LocalizedText;
-  summary: LocalizedText;
+  summary: LocalizedText | null;
   category: "economics" | "politics" | "crypto" | "sports" | "entertainment" | "ai";
   urgency: "breaking" | "hot" | "steady";
   referenceSignal: number;
@@ -14,6 +14,7 @@ export type ExploreAttention = {
   sourceCount: number;
   sources: string[];
   topics: string[];
+  outcomes: string[];
   endsInLabel: LocalizedText;
   ruleStatus: "ready" | "draft";
   sponsor?: {
@@ -55,6 +56,7 @@ export const exploreAttentions: ExploreAttention[] = [
     sourceCount: 4,
     sources: ["momment.", "Polymarket", "Kalshi", "Manifold"],
     topics: ["FOMC", "Inflation", "Rates"],
+    outcomes: ["25bp Cut", "Hold", "25bp Hike"],
     endsInLabel: text("27일 남음", "27d left", "faltan 27d"),
     ruleStatus: "ready",
   },
@@ -79,6 +81,7 @@ export const exploreAttentions: ExploreAttention[] = [
     sourceCount: 3,
     sources: ["momment.", "Kalshi", "PredictIt"],
     topics: ["Election", "Korea", "Turnout"],
+    outcomes: ["YES", "NO"],
     endsInLabel: text("12일 남음", "12d left", "faltan 12d"),
     ruleStatus: "ready",
   },
@@ -103,6 +106,7 @@ export const exploreAttentions: ExploreAttention[] = [
     sourceCount: 3,
     sources: ["momment.", "Polymarket", "Manifold"],
     topics: ["Bitcoin", "ETF", "On-chain"],
+    outcomes: ["YES", "NO"],
     endsInLabel: text("5일 남음", "5d left", "faltan 5d"),
     ruleStatus: "draft",
   },
@@ -127,6 +131,7 @@ export const exploreAttentions: ExploreAttention[] = [
     sourceCount: 2,
     sources: ["momment.", "Manifold"],
     topics: ["LCK", "Roster", "Finals"],
+    outcomes: ["YES", "NO"],
     endsInLabel: text("3일 남음", "3d left", "faltan 3d"),
     ruleStatus: "ready",
   },
@@ -151,6 +156,7 @@ export const exploreAttentions: ExploreAttention[] = [
     sourceCount: 2,
     sources: ["momment.", "Manifold"],
     topics: ["K-pop", "Comeback", "Fandom"],
+    outcomes: ["YES", "NO"],
     endsInLabel: text("14일 남음", "14d left", "faltan 14d"),
     ruleStatus: "draft",
   },
@@ -175,6 +181,7 @@ export const exploreAttentions: ExploreAttention[] = [
     sourceCount: 3,
     sources: ["momment.", "Polymarket", "Manifold"],
     topics: ["AI", "Model", "Release"],
+    outcomes: ["YES", "NO"],
     endsInLabel: text("21일 남음", "21d left", "faltan 21d"),
     ruleStatus: "ready",
   },

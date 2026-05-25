@@ -9,7 +9,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: `${siteName} 놓칠 수 없는 순간`,
+    default: `${siteName} 모멘트, 놓칠 수 없는 순간`,
     template: `%s | ${siteName}`,
   },
   description: defaultSeoDescription,

@@ -45,6 +45,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     : compactSeoDescription(null);
   const url = publicUrl(`/a/${encodeURIComponent(canonicalSlug)}`);
 
+  const ogImageParams = new URLSearchParams({
+    title: attention?.title || "moment.",
+    type: "attention",
+    category: attention?.category || "",
+    energy: String(attention?.attention_score ?? 0),
+    posts: String(attention?.post_count ?? 0),
+  });
+  const ogImage = publicUrl(`/api/og?${ogImageParams.toString()}`);
+
   return {
     title,
     description,
@@ -59,11 +68,20 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       type: "article",
       modifiedTime: attention?.updated_at,
       publishedTime: attention?.created_at,
+      images: [
+        {
+          url: ogImage,
+          width: 1200,
+          height: 630,
+          alt: attention?.title || "moment.",
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      images: [ogImage],
     },
     robots: {
       index: Boolean(attention),

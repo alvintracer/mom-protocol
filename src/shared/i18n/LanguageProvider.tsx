@@ -42,6 +42,17 @@ export function LanguageProvider({
     const saved = window.localStorage.getItem(storageKey);
     if (isLanguageCode(saved)) {
       window.setTimeout(() => setLanguageState(saved), 0);
+      return;
+    }
+
+    // No saved preference — detect from browser locale
+    const detected = detectBrowserLanguage();
+    if (detected && detected !== (initialLanguage ?? defaultLanguage)) {
+      window.setTimeout(() => {
+        setLanguageState(detected);
+        window.localStorage.setItem(storageKey, detected);
+        document.documentElement.lang = detected;
+      }, 0);
     }
   }, []);
 
@@ -83,4 +94,24 @@ export function useI18n() {
 
 function isLanguageCode(value: string | null): value is LanguageCode {
   return languages.some((language) => language.code === value);
+}
+
+/**
+ * Detect the best matching language from navigator.languages.
+ * Maps browser locale prefixes to supported languages:
+ *   ko* → ko, es* → es, everything else → en
+ */
+function detectBrowserLanguage(): LanguageCode {
+  const browserLangs =
+    typeof navigator !== "undefined" ? navigator.languages ?? [navigator.language] : [];
+
+  for (const raw of browserLangs) {
+    const prefix = raw.split("-")[0].toLowerCase();
+    if (prefix === "ko") return "ko";
+    if (prefix === "es") return "es";
+    if (prefix === "en") return "en";
+  }
+
+  // No match — fallback to English for non-Korean/non-Spanish users
+  return "en";
 }

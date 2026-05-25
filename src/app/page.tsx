@@ -572,6 +572,7 @@ function HomeFeed() {
                 post={post}
                 linkedEvent={post.linkedEventId ? eventsMap.get(post.linkedEventId) ?? null : null}
                 translatedTitle={getPostTitle(post.id, post.title)}
+                translatedBody={getPostBody(post.id, post.body)}
                 currentUserId={authUser?.id ?? null}
                 onRemoved={() => setPosts((prev) => prev.filter((p) => p.id !== post.id))}
               />
@@ -645,7 +646,7 @@ function mapPostRowToSocialPost(
     ),
     linkedEventId: row.attention_cluster_id,
     selectedOutcome: row.selected_outcome,
-    postKind: row.post_kind,
+    postKind: row.post_kind as "post" | "reply" | "repost" | "quote",
     repostOf: repostSource
       ? {
           id: repostSource.id,

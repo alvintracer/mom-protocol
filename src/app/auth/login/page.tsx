@@ -97,7 +97,6 @@ export default function LoginPage() {
     setStep("choose");
   }
 
-  // ── Sign in with password ──
   async function handlePasswordSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMsg("");
@@ -109,7 +108,16 @@ export default function LoginPage() {
     });
 
     if (error) {
-      setErrorMsg(t(dictionary.auth.error));
+      const msg = error.message?.toLowerCase() ?? "";
+      if (msg.includes("invalid login credentials") || msg.includes("invalid_credentials")) {
+        setErrorMsg(t(dictionary.auth.invalidCredentials));
+      } else if (msg.includes("user not found") || msg.includes("no user")) {
+        setErrorMsg(t(dictionary.auth.notRegistered));
+      } else if (msg.includes("rate limit") || (error as { code?: string }).code === "over_email_send_rate_limit") {
+        setErrorMsg(t(dictionary.auth.rateLimitError));
+      } else {
+        setErrorMsg(t(dictionary.auth.error));
+      }
       return;
     }
 
@@ -166,6 +174,12 @@ export default function LoginPage() {
         (error as { code?: string }).code === "over_email_send_rate_limit"
       ) {
         setErrorMsg(t(dictionary.auth.rateLimitError));
+      } else if (
+        error.message?.toLowerCase().includes("user not found") ||
+        error.message?.toLowerCase().includes("signups not allowed") ||
+        error.message?.toLowerCase().includes("otp_disabled")
+      ) {
+        setErrorMsg(t(dictionary.auth.notRegistered));
       } else {
         setErrorMsg(t(dictionary.auth.error));
       }
@@ -195,7 +209,12 @@ export default function LoginPage() {
     });
 
     if (error) {
-      setErrorMsg(t(dictionary.auth.error));
+      const msg = error.message?.toLowerCase() ?? "";
+      if (msg.includes("token") || msg.includes("otp") || msg.includes("expired") || msg.includes("invalid")) {
+        setErrorMsg(t(dictionary.auth.otpVerifyFailed));
+      } else {
+        setErrorMsg(t(dictionary.auth.error));
+      }
       setStep(prevStep as Step);
       return;
     }

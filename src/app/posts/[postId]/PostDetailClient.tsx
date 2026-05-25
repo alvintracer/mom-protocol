@@ -26,6 +26,7 @@ import { createClient } from "@/shared/lib/supabase/client";
 import { PostMediaGrid } from "@/shared/components/feed/PostMediaGrid";
 import { PostOptionMenu } from "@/shared/components/feed/PostOptionMenu";
 import { BookmarkButton } from "@/shared/components/feed/BookmarkButton";
+import { AdSlot } from "@/shared/components/ads/AdSlot";
 import { useContentTranslations } from "@/shared/hooks/useContentTranslations";
 import type { Database, SupportedLanguage } from "@/shared/types/database";
 
@@ -34,7 +35,7 @@ type CommentRow = Database["public"]["Tables"]["comments"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type AttentionRow = Database["public"]["Tables"]["attention_clusters"]["Row"];
 
-export default function PostDetailPage({
+export function PostDetailClient({
   params,
 }: {
   params: Promise<{ postId: string }>;
@@ -67,7 +68,7 @@ export default function PostDetailPage({
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [momRate, setMomRate] = useState<number>(0.001);
   const [postTopics, setPostTopics] = useState<{ label: string; source: string }[]>([]);
-  const [similarPosts, setSimilarPosts] = useState<{ id: string; title: string | null; body: string | null; authorName: string; createdAt: string }[]>([]);
+  const [similarPosts, setSimilarPosts] = useState<{ id: string; title: string | null; body: string | null; authorName: string; createdAt: string; attentionTitle: string | null; attentionSlug: string | null; selectedOutcome: string | null }[]>([]);
 
   const postIds = useMemo(() => (post ? [post.id] : []), [post]);
   const commentIds = useMemo(() => comments.map((c) => c.id), [comments]);
@@ -261,26 +262,39 @@ export default function PostDetailPage({
           if (relatedPostIds.length > 0) {
             const { data: relatedPosts } = await supabase
               .from("posts")
-              .select("id, original_title, original_body, content_format, user_id, created_at")
+              .select("id, original_title, original_body, content_format, user_id, created_at, attention_cluster_id, selected_outcome")
               .in("id", relatedPostIds)
               .eq("is_deleted", false)
               .eq("visibility", "public");
             const rAuthorIds = [...new Set((relatedPosts ?? []).map((p) => p.user_id))];
-            const { data: rAuthors } = rAuthorIds.length > 0
-              ? await supabase.from("profiles").select("id, display_name, handle").in("id", rAuthorIds)
-              : { data: [] as { id: string; display_name: string | null; handle: string | null }[] };
+            const rAttIds = [...new Set((relatedPosts ?? []).filter((p) => p.attention_cluster_id).map((p) => p.attention_cluster_id!))];
+            const [{ data: rAuthors }, attResult] = await Promise.all([
+              rAuthorIds.length > 0
+                ? supabase.from("profiles").select("id, display_name, handle").in("id", rAuthorIds)
+                : Promise.resolve({ data: [] as { id: string; display_name: string | null; handle: string | null }[] }),
+              rAttIds.length > 0
+                ? supabase.from("attention_clusters").select("id, title, slug").in("id", rAttIds)
+                : Promise.resolve({ data: [] as { id: string; title: string; slug: string | null }[] }),
+            ]);
             const rAuthMap = new Map((rAuthors ?? []).map((a) => [a.id, a.display_name || a.handle || "anon"]));
+            const rAttMap = new Map((attResult.data ?? []).map((a) => [a.id, { title: a.title, slug: a.slug }]));
             if (mounted) {
               setSimilarPosts(
-                (relatedPosts ?? []).map((p) => ({
-                  id: p.id,
-                  title: p.original_title,
-                  body: p.content_format === "html"
-                    ? (p.original_body ?? "").replace(/<[^>]+>/g, "").slice(0, 120)
-                    : (p.original_body ?? "").slice(0, 120),
-                  authorName: rAuthMap.get(p.user_id) ?? "anon",
-                  createdAt: p.created_at,
-                })),
+                (relatedPosts ?? []).map((p) => {
+                  const att = p.attention_cluster_id ? rAttMap.get(p.attention_cluster_id) : null;
+                  return {
+                    id: p.id,
+                    title: p.original_title,
+                    body: p.content_format === "html"
+                      ? (p.original_body ?? "").replace(/<[^>]+>/g, "").slice(0, 120)
+                      : (p.original_body ?? "").slice(0, 120),
+                    authorName: rAuthMap.get(p.user_id) ?? "anon",
+                    createdAt: p.created_at,
+                    attentionTitle: att?.title ?? null,
+                    attentionSlug: att?.slug ?? null,
+                    selectedOutcome: p.selected_outcome,
+                  };
+                }),
               );
             }
           }
@@ -696,6 +710,9 @@ export default function PostDetailPage({
         </div>
       </article>
 
+      {/* Ad slot — post detail bottom */}
+      <AdSlot position="post_detail_bottom" size="native" />
+
       {isQuoteOpen ? (
         <section className="border-b border-border p-4 sm:p-6">
           {userId ? (
@@ -852,6 +869,27 @@ export default function PostDetailPage({
                 href={`/posts/${sp.id}`}
                 className="block px-4 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/30 sm:px-6"
               >
+                {sp.attentionTitle && (
+                  <span
+                    role="link"
+                    tabIndex={0}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/a/${sp.attentionSlug || sp.id}`); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); router.push(`/a/${sp.attentionSlug || sp.id}`); } }}
+                    className="mb-1.5 flex cursor-pointer items-center gap-1.5 text-[11px] font-black text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                  >
+                    <span className="shrink-0 rounded bg-blue-500/10 px-1.5 py-0.5">a/</span>
+                    <span className="truncate">{sp.attentionTitle}</span>
+                    {sp.selectedOutcome && (
+                      <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black ${
+                        sp.selectedOutcome.toLowerCase() === "yes" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : sp.selectedOutcome.toLowerCase() === "no" ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                          : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                      }`}>
+                        {sp.selectedOutcome}
+                      </span>
+                    )}
+                  </span>
+                )}
                 <div className="flex items-center gap-2">
                   <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-zinc-800 to-zinc-950 text-[9px] font-bold text-white dark:from-zinc-200 dark:to-white dark:text-zinc-950">
                     {sp.authorName.slice(0, 1).toUpperCase()}

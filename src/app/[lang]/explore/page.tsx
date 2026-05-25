@@ -9,19 +9,21 @@ import {
   RiBarChart2Line,
   RiCheckboxCircleFill,
   RiCheckboxBlankCircleLine,
+  RiCheckboxCircleLine,
   RiFireLine,
   RiFlashlightLine,
   RiGlobalLine,
+  RiHashtag,
   RiSearchLine,
   RiCloseLine,
   RiSortDesc,
   RiStackLine,
+  RiStarLine,
   RiTimeLine,
 } from "react-icons/ri";
 
 import {
   exploreAttentions as fallbackExploreAttentions,
-  exploreTopics,
   type ExploreAttention,
 } from "@/shared/data/explore";
 import { useI18n } from "@/shared/i18n/LanguageProvider";
@@ -71,7 +73,7 @@ export default function ExplorePage() {
     image?: string | null;
   };
   const [externalMarkets, setExternalMarkets] = useState<ExternalMarket[]>([]);
-  const [marketSort, setMarketSort] = useState<"volume" | "newest" | "ending_soon">("volume");
+  const [marketSort, setMarketSort] = useState<"newest" | "volume" | "popular">("newest");
   const [platformFilters, setPlatformFilters] = useState({
     polymarket: true,
     manifold: true,
@@ -80,6 +82,11 @@ export default function ExplorePage() {
   const [isLoadingMarkets, setIsLoadingMarkets] = useState(false);
   const [marketSearchQuery, setMarketSearchQuery] = useState("");
   const [isMarketSearchMode, setIsMarketSearchMode] = useState(false);
+
+  // Dynamic trending topics from DB
+  type TrendingTopic = { slug: string; label: string; postCount: number; score: number };
+  const [trendingTopics, setTrendingTopics] = useState<TrendingTopic[]>([]);
+  const totalTopicPosts = useMemo(() => trendingTopics.reduce((s, t) => s + t.postCount, 0), [trendingTopics]);
 
   useEffect(() => {
     let mounted = true;
@@ -106,7 +113,8 @@ export default function ExplorePage() {
       }
 
       const clusterIds = clusterRows.map((cluster) => cluster.id);
-      const [{ data: sourceRows }, { data: membershipRows }, { data: sponsorRows }] = await Promise.all([
+      const eventIds = clusterRows.map((c) => c.canonical_event_id).filter(Boolean) as string[];
+      const [{ data: sourceRows }, { data: membershipRows }, { data: sponsorRows }, { data: assertionRows }, { data: rulesRows }, { data: translationRows }] = await Promise.all([
         supabase
           .from("attention_sources")
           .select("*")
@@ -120,6 +128,25 @@ export default function ExplorePage() {
           .select("cluster_id, sponsor_name, sponsor_logo_url, sponsor_tagline, sponsor_url, sponsor_color")
           .in("cluster_id", clusterIds)
           .eq("status", "active"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("aio_assertions")
+          .select("rule_id, finalized_outcome, status, rule:attention_rules!rule_id(event_id)")
+          .in("status", ["finalized", "challenge_period"])
+          .not("finalized_outcome", "is", null),
+        eventIds.length > 0
+          ? supabase
+              .from("attention_rules")
+              .select("event_id, supported_outcomes")
+              .in("event_id", eventIds)
+          : Promise.resolve({ data: [] as { event_id: string; supported_outcomes: string[] | null }[] }),
+        eventIds.length > 0
+          ? supabase
+              .from("event_translations")
+              .select("event_id, language, title, description")
+              .in("event_id", eventIds)
+              .eq("status", "translated")
+          : Promise.resolve({ data: [] as { event_id: string; language: string; title: string | null; description: string | null }[] }),
       ]);
 
       const sponsorMap = new Map<string, { name: string; logoUrl?: string | null; tagline?: string | null; url: string; color?: string | null }>();
@@ -135,25 +162,76 @@ export default function ExplorePage() {
         }
       }
 
+      // Build a map of cluster_id -> finalized_outcome
+      // Chain: aio_assertions → attention_rules.event_id → attention_clusters.canonical_event_id
+      const resolvedMap = new Map<string, string>();
+      if (assertionRows) {
+        // Build event_id -> cluster_id map
+        const eventToCluster = new Map<string, string>();
+        for (const c of clusterRows) {
+          if (c.canonical_event_id) {
+            eventToCluster.set(c.canonical_event_id, c.id);
+          }
+        }
+        for (const a of (assertionRows as { rule_id: string; finalized_outcome: string | null; status: string; rule: { event_id: string } | null }[])) {
+          const eventId = a.rule?.event_id;
+          if (eventId && a.finalized_outcome) {
+            const clusterId = eventToCluster.get(eventId);
+            if (clusterId) {
+              resolvedMap.set(clusterId, a.finalized_outcome);
+            }
+          }
+        }
+      }
+
       if (!mounted) {
         return;
       }
 
+      // Build event_id -> outcomes map from rules
+      const outcomesMap = new Map<string, string[]>();
+      if (rulesRows) {
+        for (const r of rulesRows as { event_id: string; supported_outcomes: string[] | null }[]) {
+          if (r.supported_outcomes && r.supported_outcomes.length > 0) {
+            outcomesMap.set(r.event_id, r.supported_outcomes);
+          }
+        }
+      }
+
+      // Build event_id -> {ko,en,es} translations map
+      type TxEntry = { title?: string | null; description?: string | null };
+      const txMap = new Map<string, { ko: TxEntry; en: TxEntry; es: TxEntry }>();
+      if (translationRows) {
+        for (const row of translationRows as { event_id: string; language: string; title: string | null; description: string | null }[]) {
+          if (!txMap.has(row.event_id)) {
+            txMap.set(row.event_id, { ko: {}, en: {}, es: {} });
+          }
+          const entry = txMap.get(row.event_id)!;
+          const lang = row.language as "ko" | "en" | "es";
+          if (lang === "ko" || lang === "en" || lang === "es") {
+            entry[lang] = { title: row.title, description: row.description };
+          }
+        }
+      }
+
       setAttentions(
-        clusterRows.map((cluster) =>
-          mapClusterToExploreAttention(
+        clusterRows.map((cluster) => {
+          const tx = cluster.canonical_event_id ? txMap.get(cluster.canonical_event_id) : undefined;
+          return mapClusterToExploreAttention(
             cluster,
             (sourceRows ?? []).filter((source) => source.cluster_id === cluster.id),
             (membershipRows ?? []).filter(
               (membership) => membership.attention_cluster_id === cluster.id,
             ),
-            dictionary.explore.mappedAttentionSummary,
             dictionary.explore.live,
             dictionary.explore.awaitingResolution,
             dictionary.explore.daysLeft,
             sponsorMap.get(cluster.id) ?? null,
-          ),
-        ),
+            resolvedMap.get(cluster.id) ?? null,
+            cluster.canonical_event_id ? outcomesMap.get(cluster.canonical_event_id) ?? [] : [],
+            tx ?? null,
+          );
+        }),
       );
       setIsLoading(false);
     }
@@ -167,8 +245,66 @@ export default function ExplorePage() {
     dictionary.explore.awaitingResolution,
     dictionary.explore.daysLeft,
     dictionary.explore.live,
-    dictionary.explore.mappedAttentionSummary,
   ]);
+
+  /* ── Load trending topics from DB ── */
+  useEffect(() => {
+    let mounted = true;
+    const supabase = createClient();
+
+    async function loadTopics() {
+      // Try topic_trend_snapshots first
+      const { data: trendData } = await supabase
+        .from("topic_trend_snapshots")
+        .select("topic_id, score, post_count, topics(slug, canonical_label)")
+        .order("score", { ascending: false })
+        .limit(12);
+
+      if (!mounted) return;
+
+      if (trendData && trendData.length > 0) {
+        const seen = new Set<string>();
+        const topics: TrendingTopic[] = [];
+        for (const row of trendData) {
+          if (row.topics && !seen.has(row.topic_id)) {
+            seen.add(row.topic_id);
+            const t = row.topics as unknown as { slug: string; canonical_label: string };
+            topics.push({
+              slug: t.slug,
+              label: t.canonical_label,
+              postCount: row.post_count ?? 0,
+              score: row.score ?? 0,
+            });
+          }
+        }
+        setTrendingTopics(topics.slice(0, 8));
+      } else {
+        // Fallback: count posts per topic from content_topics
+        const { data: ctData } = await supabase
+          .from("content_topics")
+          .select("topic_id, topics!inner(slug, canonical_label)")
+          .eq("target_type", "post");
+
+        if (!mounted) return;
+
+        const counts = new Map<string, { slug: string; label: string; count: number }>();
+        for (const row of ctData ?? []) {
+          const t = row.topics as unknown as { slug: string; canonical_label: string };
+          const existing = counts.get(row.topic_id);
+          if (existing) {
+            existing.count++;
+          } else {
+            counts.set(row.topic_id, { slug: t.slug, label: t.canonical_label, count: 1 });
+          }
+        }
+        const sorted = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 8);
+        setTrendingTopics(sorted.map((t) => ({ slug: t.slug, label: t.label, postCount: t.count, score: t.count })));
+      }
+    }
+
+    loadTopics();
+    return () => { mounted = false; };
+  }, []);
 
   /* ── Load external prediction market data ── */
   const loadExternalMarkets = useCallback(async () => {
@@ -246,7 +382,7 @@ export default function ExplorePage() {
           attention.title.ko,
           attention.title.en,
           attention.title.es,
-          attention.summary.ko,
+          attention.summary?.ko ?? "",
           attention.sources.join(" "),
           attention.topics.join(" "),
         ]
@@ -259,7 +395,7 @@ export default function ExplorePage() {
   }, [attentions, searchTerm, selectedCategory]);
 
   const breaking = filteredAttentions
-    .filter((attention) => attention.urgency === "breaking")
+    .sort((a, b) => b.attentionScore - a.attentionScore)
     .slice(0, 4);
 
   return (
@@ -295,6 +431,8 @@ export default function ExplorePage() {
       </header>
 
       <main className="space-y-7 px-4 py-5 sm:px-6">
+        {/* ─── Breaking / Top Attentions ─── */}
+        {breaking.length > 0 && (
         <section className="space-y-3">
           <SectionHeader
             icon={<RiFlashlightLine className="size-5" />}
@@ -307,25 +445,40 @@ export default function ExplorePage() {
             ))}
           </div>
         </section>
+        )}
 
         <section className="space-y-3">
           <SectionHeader
             icon={<RiFireLine className="size-5" />}
-            title={t(dictionary.explore.popularTopics)}
+            title={t(dictionary.sidebar.trendingTopics)}
             description={t(dictionary.explore.topicSource)}
           />
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {exploreTopics.map((topic) => (
-              <Link
-                key={topic.slug}
-                href={`/topic/${topic.slug}`}
-                className="min-w-fit rounded-full border border-border bg-background px-4 py-2 text-sm font-bold text-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900/50"
-              >
-                #{topic.label}
-                <span className="ml-2 text-xs text-blue-500">{topic.trend}</span>
-              </Link>
-            ))}
-          </div>
+          {trendingTopics.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {trendingTopics.map((topic) => {
+                const pct = totalTopicPosts > 0 ? Math.round((topic.postCount / totalTopicPosts) * 100) : 0;
+                return (
+                  <Link
+                    key={topic.slug}
+                    href={`/topic/${topic.slug}`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-2 text-sm font-bold text-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900/50 hover:border-blue-400"
+                  >
+                    <RiHashtag className="size-3.5 text-muted-foreground" />
+                    {topic.label}
+                    {pct > 0 && (
+                      <span className="ml-1 text-xs font-black text-blue-500">{pct}%</span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <div className="h-8 w-24 animate-pulse rounded-full bg-muted" />
+              <div className="h-8 w-20 animate-pulse rounded-full bg-muted" />
+              <div className="h-8 w-28 animate-pulse rounded-full bg-muted" />
+            </div>
+          )}
         </section>
 
         {/* ── Global Prediction Markets ── */}
@@ -338,14 +491,14 @@ export default function ExplorePage() {
 
           {/* Sort + Platform filters */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Sort pills */}
-            {(["volume", "newest", "ending_soon"] as const).map((mode) => {
-              const icons = { volume: RiBarChart2Line, newest: RiSortDesc, ending_soon: RiTimeLine };
+            {/* Sort pills — newest first, then volume, then popular */}
+            {(["newest", "volume", "popular"] as const).map((mode) => {
+              const icons = { newest: RiSortDesc, volume: RiBarChart2Line, popular: RiStarLine };
               const Icon = icons[mode];
               const labels = {
-                volume: dictionary.externalMarkets.sortVolume,
                 newest: dictionary.externalMarkets.sortNewest,
-                ending_soon: dictionary.externalMarkets.sortEndingSoon,
+                volume: dictionary.externalMarkets.sortVolume,
+                popular: dictionary.externalMarkets.sortPopular,
               };
               return (
                 <button
@@ -447,7 +600,6 @@ export default function ExplorePage() {
           <SectionHeader
             icon={<RiStackLine className="size-5" />}
             title={t(dictionary.explore.categories)}
-            description={t(dictionary.explore.unifiedSources)}
           />
           <div className="flex gap-2 overflow-x-auto pb-1">
             {categoryKeys.map((key) => (
@@ -520,6 +672,12 @@ function ExploreAttentionCard({
                 {t(dictionary.explore.breaking)}
               </span>
             ) : null}
+            {attention.resolvedOutcome ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-black text-emerald-600 dark:text-emerald-400">
+                <RiCheckboxCircleLine className="size-3.5" />
+                {attention.resolvedOutcome.toUpperCase()}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -528,9 +686,28 @@ function ExploreAttentionCard({
         <h2 className="line-clamp-2 text-[15px] font-black leading-snug text-foreground">
           {t(attention.title)}
         </h2>
-        <p className="mt-1.5 line-clamp-2 text-[13px] leading-5 text-muted-foreground">
-          {t(attention.summary)}
-        </p>
+        {attention.outcomes.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {attention.outcomes.slice(0, 6).map((outcome) => (
+              <span
+                key={outcome}
+                className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-black text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+              >
+                {outcome}
+              </span>
+            ))}
+            {attention.outcomes.length > 6 && (
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-bold text-zinc-500 dark:bg-zinc-800">
+                +{attention.outcomes.length - 6}
+              </span>
+            )}
+          </div>
+        )}
+        {attention.summary ? (
+          <p className="mt-1.5 line-clamp-2 text-[13px] leading-5 text-muted-foreground">
+            {t(attention.summary)}
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-1.5 text-center">
@@ -716,7 +893,7 @@ function SectionHeader({
 }: {
   icon: ReactNode;
   title: string;
-  description: string;
+  description?: string;
 }) {
   return (
     <div className="flex items-end justify-between gap-4">
@@ -725,7 +902,9 @@ function SectionHeader({
           <span className="text-blue-500">{icon}</span>
           <h2 className="text-xl font-black tracking-tight">{title}</h2>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        {description ? (
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        ) : null}
       </div>
     </div>
   );
@@ -747,15 +926,19 @@ function compact(value: number, language: string) {
   }).format(value);
 }
 
+type TranslationsEntry = { ko: { title?: string | null; description?: string | null }; en: { title?: string | null; description?: string | null }; es: { title?: string | null; description?: string | null } } | null;
+
 function mapClusterToExploreAttention(
   cluster: AttentionCluster,
   sources: AttentionSource[],
   memberships: AttentionMembership[],
-  fallbackSummary: LocalizedText,
   liveLabel: LocalizedText,
   awaitingResolutionLabel: LocalizedText,
   daysLeftLabel: LocalizedText,
   sponsor?: ExploreAttention["sponsor"],
+  resolvedOutcome?: string | null,
+  outcomes?: string[],
+  translations?: TranslationsEntry,
 ): ExploreAttention {
   const sourceNames = Array.from(
     new Set(sources.map((source) => source.source_platform).filter(Boolean)),
@@ -778,8 +961,10 @@ function mapClusterToExploreAttention(
   return {
     id: cluster.id,
     slug: cluster.slug || cluster.id,
-    title: localize(cluster.title),
-    summary: cluster.description ? localize(cluster.description) : fallbackSummary,
+    title: localizeField(cluster.title, translations, "title"),
+    summary: cluster.description
+      ? localizeField(cluster.description, translations, "description")
+      : null,
     category: normalizeCategory(cluster.category),
     urgency: resolveUrgency(Number(cluster.attention_score), cluster.post_count),
     referenceSignal,
@@ -789,16 +974,27 @@ function mapClusterToExploreAttention(
     sourceCount: cluster.source_count || sources.length,
     sources: sourceNames.length > 0 ? sourceNames : ["momment."],
     topics: deriveTopics(cluster, sources),
+    outcomes: outcomes ?? [],
     endsInLabel: closestEndAt
       ? formatEndsIn(closestEndAt, liveLabel, awaitingResolutionLabel, daysLeftLabel)
       : liveLabel,
     ruleStatus: sources.some((source) => Boolean(source.rules_text)) ? "ready" : "draft",
     sponsor: sponsor ?? null,
+    resolvedOutcome: resolvedOutcome ?? null,
   };
 }
 
-function localize(value: string): LocalizedText {
-  return text(value, value, value);
+function localizeField(
+  fallback: string,
+  translations: TranslationsEntry | undefined,
+  field: "title" | "description",
+): LocalizedText {
+  if (!translations) return text(fallback, fallback, fallback);
+  return text(
+    translations.ko?.[field] || fallback,
+    translations.en?.[field] || fallback,
+    translations.es?.[field] || fallback,
+  );
 }
 
 function normalizeCategory(category: string | null): ExploreAttention["category"] {

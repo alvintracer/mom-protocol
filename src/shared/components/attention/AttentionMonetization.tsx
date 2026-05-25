@@ -138,14 +138,15 @@ export function AttentionLeaderboard({
 
   useEffect(() => {
     const supabase = createClient();
-    supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
       .from("attention_contributor_rankings")
       .select("*")
       .eq("cluster_id", clusterId)
       .order("rank", { ascending: true })
       .limit(10)
-      .then(({ data }) => {
-        setContributors((data as unknown as Contributor[]) ?? []);
+      .then(({ data }: { data: unknown }) => {
+        setContributors((data as Contributor[]) ?? []);
         setLoading(false);
       });
   }, [clusterId]);

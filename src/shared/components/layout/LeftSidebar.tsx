@@ -109,16 +109,16 @@ export function LeftSidebar() {
           <Image
             src="/logo-dark.svg"
             alt="momment."
-            width={132}
-            height={21}
+            width={112}
+            height={18}
             className="dark:hidden"
             priority
           />
           <Image
             src="/logo-light.svg"
             alt="momment."
-            width={132}
-            height={21}
+            width={112}
+            height={18}
             className="hidden dark:block"
             priority
           />

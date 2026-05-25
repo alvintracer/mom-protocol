@@ -11,7 +11,7 @@ import {
   RiGlobalLine,
   RiMegaphoneLine,
   RiShieldCheckLine,
-  RiSendPlane2Line,
+  RiShareForwardLine,
   RiUser3Line,
 } from "react-icons/ri";
 
@@ -64,6 +64,8 @@ export function AttentionPageClient({ slug }: { slug: string }) {
   const [isTogglingJoin, setIsTogglingJoin] = useState(false);
   const [builder, setBuilder] = useState<ProfileRow | null>(null);
   const [latestAssertion, setLatestAssertion] = useState<AioAssertionRow | null>(null);
+  const [translatedTitle, setTranslatedTitle] = useState<string | null>(null);
+  const [translatedDescription, setTranslatedDescription] = useState<string | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "missing">(
     "loading",
   );
@@ -174,6 +176,22 @@ export function AttentionPageClient({ slug }: { slug: string }) {
       }
 
       setStatus("ready");
+
+      // Load translations for the cluster
+      if (clusterData.canonical_event_id) {
+        const { data: txRows } = await supabase
+          .from("event_translations")
+          .select("language, title, description")
+          .eq("event_id", clusterData.canonical_event_id)
+          .eq("status", "translated");
+        if (mounted && txRows) {
+          const tx = txRows.find((r) => r.language === language);
+          if (tx) {
+            setTranslatedTitle(tx.title || null);
+            setTranslatedDescription(tx.description || null);
+          }
+        }
+      }
     }
 
     loadAttention();
@@ -354,15 +372,45 @@ export function AttentionPageClient({ slug }: { slug: string }) {
               </>
             ) : null}
           </div>
-          <div className="flex items-center gap-2 pb-1">
+          <div className="flex items-center gap-2 pt-4 pb-1">
+            <button
+              onClick={async () => {
+                const shareUrl = window.location.href;
+                const shareTitle = translatedTitle || cluster.title;
+                if (navigator.share) {
+                  try {
+                    await navigator.share({
+                      title: shareTitle,
+                      text: `${shareTitle} — moment.`,
+                      url: shareUrl,
+                    });
+                  } catch {
+                    // User cancelled
+                  }
+                } else {
+                  await navigator.clipboard.writeText(shareUrl);
+                  // Simple toast feedback
+                  const btn = document.getElementById("share-btn-attention");
+                  if (btn) {
+                    btn.textContent = "✓";
+                    setTimeout(() => { btn.textContent = ""; }, 1500);
+                  }
+                }
+              }}
+              id="share-btn-attention"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-zinc-50 hover:text-foreground dark:hover:bg-zinc-900"
+              title={t({ ko: "공유", en: "Share", es: "Compartir" })}
+            >
+              <RiShareForwardLine className="size-4" />
+            </button>
             <BookmarkButton targetType="attention" targetId={cluster.id} variant="icon" />
             {isCreator ? (
               <button
                 onClick={handleDeleteAttention}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-red-200 bg-background px-4 text-sm font-black text-red-500 transition-colors hover:bg-red-50 hover:border-red-400 dark:border-red-500/30 dark:hover:bg-red-500/10"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-red-200 bg-background text-sm font-black text-red-500 transition-colors hover:bg-red-50 hover:border-red-400 dark:border-red-500/30 dark:hover:bg-red-500/10 sm:w-auto sm:gap-2 sm:px-4"
               >
                 <RiDeleteBinLine className="size-4" />
-                삭제
+                <span className="hidden sm:inline">삭제</span>
               </button>
             ) : null}
             <button
@@ -383,13 +431,13 @@ export function AttentionPageClient({ slug }: { slug: string }) {
         <div className="mt-3">
           <p className="text-[12px] font-black tracking-wider text-blue-500">a/{displaySlug}</p>
           <h1 className="mt-1 max-w-3xl text-2xl font-black leading-tight text-foreground sm:text-3xl">
-            {cluster.title}
+            {translatedTitle || cluster.title}
           </h1>
         </div>
 
-        {cluster.description ? (
+        {(translatedDescription || cluster.description) ? (
           <p className="mt-3 max-w-3xl text-[15px] font-medium leading-6 text-muted-foreground">
-            {cluster.description}
+            {translatedDescription || cluster.description}
           </p>
         ) : null}
 
@@ -474,7 +522,7 @@ export function AttentionPageClient({ slug }: { slug: string }) {
                 </p>
               </div>
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm">
-                <RiSendPlane2Line className="size-4" />
+                <RiShareForwardLine className="size-4" />
               </span>
             </Link>
           </section>
@@ -542,11 +590,13 @@ export function AttentionPageClient({ slug }: { slug: string }) {
                     {t(dictionary.aio.assertion.viewOracle)}
                   </Link>
                 </div>
-                <div className="overflow-x-auto pb-1">
-                  <AioStatusPipeline
-                    status={aioDisplayStatus as Parameters<typeof AioStatusPipeline>[0]["status"]}
-                  />
-                </div>
+                {aioDisplayStatus !== "not_submitted" && (
+                  <div className="overflow-x-auto pb-1">
+                    <AioStatusPipeline
+                      status={aioDisplayStatus as Parameters<typeof AioStatusPipeline>[0]["status"]}
+                    />
+                  </div>
+                )}
                 {latestAssertion ? (
                   <div className="rounded-xl border border-border/70 bg-zinc-50/60 p-3 dark:bg-zinc-900/30">
                     <div className="flex flex-wrap items-center gap-2 text-[11px] font-black text-muted-foreground">
@@ -558,7 +608,11 @@ export function AttentionPageClient({ slug }: { slug: string }) {
                       {latestAssertion.claim_text}
                     </p>
                   </div>
-                ) : null}
+                ) : (
+                  <p className="text-[13px] font-semibold text-muted-foreground">
+                    {t(dictionary.aio.assertion.awaitingSubmission)}
+                  </p>
+                )}
               </section>
               {canSubmitAssertion ? (
                 <AioAssertionForm
@@ -690,7 +744,10 @@ function getAioDisplayStatus(
   assertion: AioAssertionRow | null,
   rule: AttentionRule | null,
 ) {
-  if (assertion?.status) {
+  if (!assertion) {
+    return "not_submitted";
+  }
+  if (assertion.status) {
     return assertion.status;
   }
 
