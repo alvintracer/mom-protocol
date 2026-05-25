@@ -855,6 +855,7 @@ export const dictionary = {
     ),
     participants: text("참여", "Participants", "Participantes"),
     posts: text("포스트", "Posts", "Posts"),
+    deadline: text("마감", "Deadline", "Plazo"),
     energy: text("Energy", "Energy", "Energy"),
     ruleReady: text("AIO 룰 준비", "AIO rules ready", "Reglas AIO listas"),
     ruleDraft: text("룰 초안", "Rule draft", "Borrador de reglas"),

@@ -712,11 +712,8 @@ function ExploreAttentionCard({
 
       <div className="mt-3 grid grid-cols-3 gap-1.5 text-center">
         <Metric label={t(dictionary.explore.energy)} value={attention.attentionScore} />
-        <Metric
-          label={t(dictionary.explore.participants)}
-          value={compact(attention.participantCount, language)}
-        />
         <Metric label={t(dictionary.explore.posts)} value={attention.postCount} />
+        <Metric label={t(dictionary.explore.deadline)} value={t(attention.endsInLabel)} isText />
       </div>
 
       {attention.sponsor && (
@@ -910,11 +907,11 @@ function SectionHeader({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string | number }) {
+function Metric({ label, value, isText }: { label: string; value: string | number; isText?: boolean }) {
   return (
     <div className="rounded-lg bg-muted/50 px-1.5 py-1.5">
       <p className="truncate text-[11px] font-bold text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-[13px] font-black text-foreground">{value}</p>
+      <p className={`mt-0.5 truncate font-black text-foreground ${isText ? "text-[11px]" : "text-[13px]"}`}>{value}</p>
     </div>
   );
 }

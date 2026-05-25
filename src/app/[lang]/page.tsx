@@ -190,6 +190,24 @@ function HomeFeed() {
           feedData = recIds
             .map((id: string) => recMap.get(id))
             .filter((p): p is PostRow => p != null);
+
+          // Backfill with latest posts if recommendations are < 20
+          if (feedData.length < 20) {
+            const existingIds = new Set(feedData.map((p) => p.id));
+            const { data: backfillPosts } = await supabase
+              .from("posts")
+              .select("*")
+              .eq("visibility", "public")
+              .eq("is_deleted", false)
+              .order("created_at", { ascending: false })
+              .limit(20);
+            for (const p of backfillPosts ?? []) {
+              if (!existingIds.has(p.id) && feedData.length < 20) {
+                feedData.push(p);
+                existingIds.add(p.id);
+              }
+            }
+          }
         } else {
           // Not enough recommendations → chronological fallback
           const { data: allPosts } = await postQuery;

@@ -56,7 +56,7 @@ function generateHandle() {
   return `mom_${randomPick(ANIMALS).slice(0, 2)}${randomNum(1000, 9999)}`;
 }
 function generateDisplayName() {
-  return `${randomPick(PREFIXES)} ${randomPick(ANIMALS)}`;
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 8);
 }
 
 /**
@@ -217,23 +217,36 @@ async function handleGeneratePosts(attentionId: string, count: number) {
   const safeCount = Math.min(count, 10);
 
   // Generate post content with GPT
-  const prompt = `당신은 "moment."라는 예측 어텐션 커뮤니티의 다양한 유저입니다.
-아래 어텐션 주제에 대해 ${safeCount}개의 서로 다른 포스트를 작성하세요.
+  const prompt = `너는 한국 커뮤니티 유저 ${safeCount}명이야. 각각 다른 사람이고, 아래 주제에 대해 글을 써.
 
-어텐션 제목: "${attention.title}"
+주제: "${attention.title}"
 카테고리: ${attention.category || "일반"}
-설명: ${attention.description || "없음"}
+맥락: ${attention.description || "없음"}
 
-규칙:
-- 각 포스트는 서로 다른 관점/스타일이어야 합니다 (분석, 의견, 유머, 정보공유, 질문 등)
-- 커뮤니티 느낌으로 자연스럽게 (오글거리지 않게, 실제 유저가 쓸법하게)
-- 길이는 2~5문장 정도
-- 이모지 적절히 사용
-- 한국어로 작성
-- 포스트마다 선택적으로 짧은 제목을 넣을 수 있음 (없어도 됨)
+중요 규칙:
+- 진짜 사람이 쓴것처럼 써. AI가 쓴 느낌 절대 나면 안됨
+- "~하는 건 어떨까요" "~가 제 motto예요" 이런 식의 AI체 절대 금지
+- 디시, 레딧, 에펨코리아에서 볼법한 실제 유저 말투
+- 반말/존댓말 섞어서. 사람마다 다르게
+- 문장 1~3개로 짧게. 긴 글 쓰지마
+- 이모지는 1~2개만, 안 써도 됨
+- 제목은 대부분 null로. 가끔 한줄짜리 제목
+- 스타일 예시: 팩트 전달, 한줄 의견, 까는 글, 응원, 밈, 질문, 뉴스 요약 등
+- "ㅋㅋ" "ㄹㅇ" "ㅇㅇ" "ㄴㄴ" 같은 축약어도 가끔 사용
+- 절대 모든 글이 비슷한 톤이면 안됨
 
-JSON 배열로 반환:
-[{"title": "제목 또는 null", "body": "본문 내용"}, ...]`;
+나쁜 예 (AI체, 이렇게 쓰지마):
+- "여러분도 기대하고 있죠? 😂🍗"
+- "축제처럼 즐길 수 있겠죠!"
+- "기대감은 넘치네요~"
+
+좋은 예 (진짜 커뮤니티 글):
+- "손흥민 컨디션 보면 조별리그는 넘는다 봄"
+- "이번엔 진짜 기대해도 되는거냐 ㅋㅋ"
+- "16강 가면 치킨 쏜다"
+
+JSON으로만 반환. 다른 텍스트 쓰지마:
+{"posts": [{"title": null, "body": "본문"}, ...]}`;
 
   let posts: { title: string | null; body: string }[] = [];
   try {
@@ -337,22 +350,24 @@ async function handleGenerateComments(attentionId: string, count: number) {
     (p, i) => `${i + 1}. [Post ID: ${p.id}] "${p.original_title || p.original_body.slice(0, 60)}"`
   ).join("\n");
 
-  const prompt = `당신은 "moment." 커뮤니티의 다양한 유저입니다.
-아래 포스트들에 각각 1개씩 댓글을 달아주세요.
+  const prompt = `너는 한국 커뮤니티 유저야. 아래 포스트들에 댓글을 달아.
 
-어텐션: "${attention.title}"
+주제: "${attention.title}"
 
 포스트 목록:
 ${postSummaries}
 
-규칙:
-- 각 댓글은 해당 포스트 내용에 맞는 반응이어야 합니다
-- 동의, 반박, 질문, 추가정보, 유머 등 다양한 스타일로
-- 1~3문장, 자연스러운 커뮤니티 댓글처럼
-- 한국어, 이모지 적절히
+중요 규칙:
+- 진짜 사람 댓글처럼. AI체 절대 금지
+- 1문장이 대부분. 길어도 2문장
+- 반말 위주. "ㅋㅋ" "ㄹㅇ" "ㅇㅈ" 같은 축약어 자연스럽게
+- 동의, 태클, 드립, 추가정보, 짧은 리액션 등 다양하게
+- 이모지 0~1개
+- 나쁜 예: "정말 좋은 분석이네요! 저도 동의합니다 😊"
+- 좋은 예: "ㅇㅈ 이건 맞는듯", "아 진짜? 소스 있음?", "ㅋㅋㅋㅋ", "와 미쳤다"
 
-JSON 배열로 반환:
-[{"post_id": "...", "body": "댓글 내용"}, ...]`;
+JSON으로만 반환:
+{"comments": [{"post_id": "...", "body": "댓글"}, ...]}`;
 
   let comments: { post_id: string; body: string }[] = [];
   try {
