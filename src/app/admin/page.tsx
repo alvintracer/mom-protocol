@@ -443,6 +443,15 @@ export default function AdminPage() {
         </p>
         <AdNetworkPanel />
       </section>
+
+      {/* ─── Community Seeding ─── */}
+      <section className="rounded-2xl border border-border bg-background p-5 shadow-sm">
+        <h2 className="text-lg font-black text-foreground">🤖 커뮤니티 시딩</h2>
+        <p className="mt-1 text-sm font-semibold leading-6 text-muted-foreground">
+          AI 유저를 생성하고, 어텐션에 포스트/댓글을 자동 생성합니다. GPT-4o-mini로 자연스러운 커뮤니티 콘텐츠를 만듭니다.
+        </p>
+        <CommunitySeedPanel />
+      </section>
     </div>
   );
 }
@@ -1272,6 +1281,347 @@ function AdNetworkPanel() {
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── Community Seed Panel ────────────────────────────────────── */
+
+type SeedAttention = {
+  id: string;
+  title: string;
+  category: string | null;
+  post_count: number;
+  status: string;
+};
+
+type SeedUser = {
+  id: string;
+  handle: string;
+  display_name: string;
+  mom_energy: number;
+};
+
+function CommunitySeedPanel() {
+  const [attentions, setAttentions] = useState<SeedAttention[]>([]);
+  const [aiUsers, setAiUsers] = useState<SeedUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [log, setLog] = useState<string[]>([]);
+
+  // User creation
+  const [userCount, setUserCount] = useState("10");
+  const [creatingUsers, setCreatingUsers] = useState(false);
+
+  // Post/comment generation
+  const [selectedAttention, setSelectedAttention] = useState<string>("");
+  const [postCount, setPostCount] = useState("3");
+  const [commentCount, setCommentCount] = useState("5");
+  const [generatingPosts, setGeneratingPosts] = useState(false);
+  const [generatingComments, setGeneratingComments] = useState(false);
+
+  // Batch mode
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchPostCount, setBatchPostCount] = useState("3");
+
+  function addLog(msg: string) {
+    setLog((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 50));
+  }
+
+  async function loadData() {
+    setLoading(true);
+    try {
+      const [attRes, userRes] = await Promise.all([
+        fetch("/api/admin/community-seed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "list_attentions" }),
+        }),
+        fetch("/api/admin/community-seed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "list_ai_users" }),
+        }),
+      ]);
+      const attData = await attRes.json();
+      const userData = await userRes.json();
+      setAttentions(attData.attentions ?? []);
+      setAiUsers(userData.users ?? []);
+    } catch (err) {
+      addLog(`❌ 데이터 로드 실패: ${err}`);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function handleCreateUsers() {
+    setCreatingUsers(true);
+    addLog(`👤 AI 유저 ${userCount}명 생성 중...`);
+    try {
+      const res = await fetch("/api/admin/community-seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create_users", count: Number(userCount) }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        addLog(`❌ ${data.error}`);
+      } else {
+        addLog(`✅ ${data.count}명 생성 완료: ${data.created.map((u: { display_name: string }) => u.display_name).join(", ")}`);
+        loadData();
+      }
+    } catch (err) {
+      addLog(`❌ ${err}`);
+    }
+    setCreatingUsers(false);
+  }
+
+  async function handleGeneratePosts() {
+    if (!selectedAttention) {
+      addLog("⚠️ 어텐션을 선택하세요");
+      return;
+    }
+    setGeneratingPosts(true);
+    const att = attentions.find((a) => a.id === selectedAttention);
+    addLog(`📝 "${att?.title}" 포스트 ${postCount}개 생성 중...`);
+    try {
+      const res = await fetch("/api/admin/community-seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generate_posts", attention_id: selectedAttention, count: Number(postCount) }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        addLog(`❌ ${data.error}`);
+      } else {
+        addLog(`✅ "${data.attention}" 포스트 ${data.created}개 생성 완료`);
+        loadData();
+      }
+    } catch (err) {
+      addLog(`❌ ${err}`);
+    }
+    setGeneratingPosts(false);
+  }
+
+  async function handleGenerateComments() {
+    if (!selectedAttention) {
+      addLog("⚠️ 어텐션을 선택하세요");
+      return;
+    }
+    setGeneratingComments(true);
+    const att = attentions.find((a) => a.id === selectedAttention);
+    addLog(`💬 "${att?.title}" 댓글 ${commentCount}개 생성 중...`);
+    try {
+      const res = await fetch("/api/admin/community-seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generate_comments", attention_id: selectedAttention, count: Number(commentCount) }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        addLog(`❌ ${data.error}`);
+      } else {
+        addLog(`✅ "${data.attention}" 댓글 ${data.created}개 생성 완료`);
+      }
+    } catch (err) {
+      addLog(`❌ ${err}`);
+    }
+    setGeneratingComments(false);
+  }
+
+  async function handleBatchAll() {
+    setBatchRunning(true);
+    const count = Number(batchPostCount);
+    addLog(`🚀 전체 어텐션 배치 시작: 어텐션 ${attentions.length}개 × 포스트 ${count}개`);
+
+    for (const att of attentions) {
+      addLog(`📝 "${att.title}" 포스트 생성 중...`);
+      try {
+        const res = await fetch("/api/admin/community-seed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "generate_posts", attention_id: att.id, count }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          addLog(`  ❌ ${data.error}`);
+        } else {
+          addLog(`  ✅ ${data.created}개 포스트 생성`);
+        }
+      } catch (err) {
+        addLog(`  ❌ ${err}`);
+      }
+      // Small delay between attentions
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+
+    addLog("🎉 배치 완료!");
+    loadData();
+    setBatchRunning(false);
+  }
+
+  const isAnyRunning = creatingUsers || generatingPosts || generatingComments || batchRunning;
+
+  return (
+    <div className="mt-4 space-y-5">
+      {/* AI Users Section */}
+      <div className="rounded-xl border border-border p-4">
+        <h3 className="text-sm font-black text-foreground">👤 AI 유저 관리</h3>
+        <p className="mt-1 text-xs font-semibold text-muted-foreground">
+          현재 AI 유저: <span className="font-black text-blue-600">{aiUsers.length}</span>명
+        </p>
+
+        <div className="mt-3 flex items-center gap-3">
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={userCount}
+            onChange={(e) => setUserCount(e.target.value)}
+            className="h-10 w-24 rounded-lg border border-border bg-zinc-50 px-3 text-sm font-bold dark:bg-zinc-900/50"
+          />
+          <span className="text-sm font-semibold text-muted-foreground">명</span>
+          <button
+            onClick={handleCreateUsers}
+            disabled={isAnyRunning}
+            className="h-10 rounded-full bg-blue-600 px-5 text-sm font-black text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+          >
+            {creatingUsers ? "생성 중..." : "유저 생성"}
+          </button>
+        </div>
+
+        {aiUsers.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {aiUsers.slice(0, 20).map((u) => (
+              <span key={u.id} className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-bold text-foreground dark:bg-zinc-800">
+                {u.display_name}
+              </span>
+            ))}
+            {aiUsers.length > 20 && (
+              <span className="text-[11px] font-semibold text-muted-foreground py-1">
+                +{aiUsers.length - 20}명
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Post/Comment Generation */}
+      <div className="rounded-xl border border-border p-4">
+        <h3 className="text-sm font-black text-foreground">📝 포스트/댓글 생성</h3>
+
+        <div className="mt-3">
+          <label className="mb-1.5 block text-[12px] font-black text-foreground">어텐션 선택</label>
+          <select
+            value={selectedAttention}
+            onChange={(e) => setSelectedAttention(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border bg-zinc-50 px-3 text-sm font-bold text-foreground outline-none dark:bg-zinc-900/50"
+          >
+            <option value="">선택하세요...</option>
+            {attentions.map((att) => (
+              <option key={att.id} value={att.id}>
+                [{att.category || "일반"}] {att.title} ({att.post_count}개 포스트)
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div>
+            <label className="mb-1.5 block text-[12px] font-black text-foreground">포스트 수</label>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={postCount}
+              onChange={(e) => setPostCount(e.target.value)}
+              className="h-10 w-24 rounded-lg border border-border bg-zinc-50 px-3 text-sm font-bold dark:bg-zinc-900/50"
+            />
+          </div>
+          <button
+            onClick={handleGeneratePosts}
+            disabled={isAnyRunning || !selectedAttention}
+            className="h-10 rounded-full bg-emerald-600 px-5 text-sm font-black text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {generatingPosts ? "생성 중..." : "포스트 생성"}
+          </button>
+
+          <div className="sm:ml-4">
+            <label className="mb-1.5 block text-[12px] font-black text-foreground">댓글 수</label>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={commentCount}
+              onChange={(e) => setCommentCount(e.target.value)}
+              className="h-10 w-24 rounded-lg border border-border bg-zinc-50 px-3 text-sm font-bold dark:bg-zinc-900/50"
+            />
+          </div>
+          <button
+            onClick={handleGenerateComments}
+            disabled={isAnyRunning || !selectedAttention}
+            className="h-10 rounded-full bg-violet-600 px-5 text-sm font-black text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+          >
+            {generatingComments ? "생성 중..." : "댓글 생성"}
+          </button>
+        </div>
+      </div>
+
+      {/* Batch All */}
+      <div className="rounded-xl border border-dashed border-amber-400 bg-amber-50/50 p-4 dark:border-amber-500/40 dark:bg-amber-900/10">
+        <h3 className="text-sm font-black text-foreground">⚡ 전체 배치</h3>
+        <p className="mt-1 text-xs font-semibold text-muted-foreground">
+          모든 어텐션에 동일 갯수의 포스트를 한번에 생성합니다.
+        </p>
+        <div className="mt-3 flex items-center gap-3">
+          <input
+            type="number"
+            min={1}
+            max={10}
+            value={batchPostCount}
+            onChange={(e) => setBatchPostCount(e.target.value)}
+            className="h-10 w-24 rounded-lg border border-border bg-background px-3 text-sm font-bold"
+          />
+          <span className="text-sm font-semibold text-muted-foreground">
+            개씩 × {attentions.length}개 어텐션
+          </span>
+          <button
+            onClick={handleBatchAll}
+            disabled={isAnyRunning || attentions.length === 0}
+            className="h-10 rounded-full bg-amber-600 px-5 text-sm font-black text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
+          >
+            {batchRunning ? "배치 실행 중..." : "🚀 전체 배치 실행"}
+          </button>
+        </div>
+      </div>
+
+      {/* Logs */}
+      {log.length > 0 && (
+        <div className="rounded-xl border border-border bg-zinc-950 p-4 dark:bg-zinc-900/30">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-zinc-400">로그</h3>
+            <button
+              onClick={() => setLog([])}
+              className="text-[11px] font-bold text-zinc-500 hover:text-zinc-300"
+            >
+              지우기
+            </button>
+          </div>
+          <div className="mt-2 max-h-60 space-y-1 overflow-y-auto font-mono text-xs leading-5 text-zinc-300">
+            {log.map((line, i) => (
+              <p key={i}>{line}</p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+          <span className="animate-spin">⏳</span> 데이터 로딩 중...
+        </div>
+      )}
     </div>
   );
 }

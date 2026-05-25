@@ -439,7 +439,7 @@ export default function ExplorePage() {
             title={t(dictionary.explore.breaking)}
             description={t(dictionary.explore.breakingDesc)}
           />
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 min-[1750px]:grid-cols-5">
+          <div className="grid gap-3 overflow-hidden md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 min-[1750px]:grid-cols-5">
             {breaking.map((attention) => (
               <ExploreAttentionCard key={attention.id} attention={attention} featured />
             ))}
@@ -619,7 +619,7 @@ export default function ExplorePage() {
           {isLoading ? (
             <AttentionGridSkeleton />
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 min-[1750px]:grid-cols-5">
+            <div className="grid gap-3 overflow-hidden sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 min-[1750px]:grid-cols-5">
               {filteredAttentions.map((attention) => (
                 <ExploreAttentionCard key={attention.id} attention={attention} />
               ))}
@@ -655,8 +655,8 @@ function ExploreAttentionCard({
     <Link
       href={`/a/${slug}`}
       className={[
-        "group flex flex-col rounded-2xl border border-border bg-background p-3.5 transition-all hover:-translate-y-0.5 hover:bg-zinc-50 hover:shadow-sm dark:hover:bg-zinc-900/50",
-        featured ? "min-h-48 md:min-h-56" : "min-h-[140px] max-h-[calc(100vw*9/16)]",
+        "group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-background p-3.5 transition-all hover:-translate-y-0.5 hover:bg-zinc-50 hover:shadow-sm dark:hover:bg-zinc-900/50",
+        featured ? "min-h-48 md:min-h-56" : "min-h-[140px]",
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-3">
