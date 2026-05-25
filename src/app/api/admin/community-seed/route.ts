@@ -110,23 +110,40 @@ async function handleCreateUsers(count: number) {
   for (let i = 0; i < Math.min(count, 50); i++) {
     const handle = generateHandle();
     const displayName = generateDisplayName();
-    const id = crypto.randomUUID();
+    const emailId = `ai_${Date.now()}_${randomNum(1000, 9999)}`;
+    const email = `${emailId}@ai.moment.local`;
 
-    // Insert directly into profiles (service role bypasses auth.users requirement for seeding)
-    const { error } = await supabase.from("profiles").insert({
-      id,
-      handle,
-      display_name: displayName,
-      avatar_url: null,
-      mom_energy: randomNum(50, 500),
-      preferred_language: "ko",
+    // 1. Create auth user (triggers profile creation via DB trigger)
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password: crypto.randomUUID(), // random password, these users don't login
+      email_confirm: true,
+      user_metadata: { name: displayName },
     });
 
-    if (!error) {
-      created.push({ id, handle, display_name: displayName });
-    } else {
-      console.error("Failed to create AI user:", error);
+    if (authError || !authData.user) {
+      console.error("Failed to create AI auth user:", authError);
+      continue;
     }
+
+    const userId = authData.user.id;
+
+    // 2. Update the auto-created profile with our custom handle, display name, energy
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({
+        handle,
+        display_name: displayName,
+        mom_energy: randomNum(50, 500),
+        preferred_language: "ko",
+      })
+      .eq("id", userId);
+
+    if (updateError) {
+      console.error("Failed to update AI profile:", updateError);
+    }
+
+    created.push({ id: userId, handle, display_name: displayName });
   }
 
   return NextResponse.json({ created, count: created.length });

@@ -82,15 +82,15 @@ export function BoardRow({ post, linkedEvent, translatedTitle, translatedBody }:
 
           {linkedEvent && (
             <span
-              className="inline-flex shrink-0 items-center gap-0.5 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-black text-blue-600 dark:text-blue-400 cursor-pointer hover:bg-blue-500/20 transition-colors"
+              className="inline-flex shrink-0 items-center gap-0.5 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-black text-blue-600 dark:text-blue-400 cursor-pointer hover:bg-blue-500/20 transition-colors max-w-[120px] sm:max-w-[160px]"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 window.location.href = `/a/${linkedEvent.slug || linkedEvent.id}`;
               }}
             >
-              <RiLinksLine className="size-2.5" />
-              a/{linkedEvent.slug || linkedEvent.id.slice(0, 6)}
+              <RiLinksLine className="size-2.5 shrink-0" />
+              <span className="truncate">a/{linkedEvent.slug || linkedEvent.id.slice(0, 6)}</span>
             </span>
           )}
 
