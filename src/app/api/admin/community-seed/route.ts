@@ -97,6 +97,20 @@ export async function POST(req: NextRequest) {
       return handleListAttentions();
     case "list_ai_users":
       return handleListAIUsers();
+    case "reset_ai_energy": {
+      const supabase = createServiceClient();
+      // Count first, then update
+      const { count: affected } = await supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .like("handle", "mom_%")
+        .gt("mom_energy", 0);
+      await supabase
+        .from("profiles")
+        .update({ mom_energy: 0 })
+        .like("handle", "mom_%");
+      return NextResponse.json({ reset: true, affected: affected ?? 0 });
+    }
     default:
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
@@ -128,13 +142,14 @@ async function handleCreateUsers(count: number) {
 
     const userId = authData.user.id;
 
-    // 2. Update the auto-created profile with our custom handle, display name, energy
+    // 2. Update the auto-created profile with our custom handle, display name
+    // AI users get 0 energy to avoid inflating circulating supply
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
         handle,
         display_name: displayName,
-        mom_energy: randomNum(50, 500),
+        mom_energy: 0,
         preferred_language: "ko",
       })
       .eq("id", userId);
@@ -292,6 +307,7 @@ JSON으로만 반환. 다른 텍스트 쓰지마:
     }
   }
 
+
   return NextResponse.json({
     created: created.length,
     post_ids: created,
@@ -406,8 +422,17 @@ JSON으로만 반환:
     }
   }
 
+
   return NextResponse.json({
     created: createdCount,
     attention: attention.title,
   });
+}
+
+/* ── Reset AI user energy to 0 ─── */
+async function resetAiUserEnergy(supabase: ReturnType<typeof createServiceClient>) {
+  await supabase
+    .from("profiles")
+    .update({ mom_energy: 0 })
+    .like("handle", "mom_%");
 }

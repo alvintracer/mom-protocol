@@ -1597,6 +1597,33 @@ function CommunitySeedPanel() {
         </div>
       </div>
 
+      {/* Reset AI Energy */}
+      <div className="rounded-xl border border-dashed border-rose-400 bg-rose-50/50 p-4 dark:border-rose-500/40 dark:bg-rose-900/10">
+        <h3 className="text-sm font-black text-foreground">🔥 AI 유저 에너지 리셋</h3>
+        <p className="mt-1 text-xs font-semibold text-muted-foreground">
+          모든 AI 유저(mom_*)의 MOM Energy를 0으로 리셋합니다. 시딩으로 인한 인플레이션을 해소합니다.
+        </p>
+        <button
+          onClick={async () => {
+            addLog("AI 유저 에너지 리셋 중...");
+            try {
+              const res = await fetch("/api/admin/community-seed", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "reset_ai_energy" }),
+              });
+              const data = await res.json();
+              addLog(`✅ AI 유저 ${data.affected ?? 0}명 에너지 → 0 리셋 완료`);
+            } catch {
+              addLog("❌ 리셋 실패");
+            }
+          }}
+          className="mt-3 h-10 rounded-full bg-rose-600 px-5 text-sm font-black text-white transition-colors hover:bg-rose-700"
+        >
+          🔥 AI 에너지 전체 리셋
+        </button>
+      </div>
+
       {/* Logs */}
       {log.length > 0 && (
         <div className="rounded-xl border border-border bg-zinc-950 p-4 dark:bg-zinc-900/30">
