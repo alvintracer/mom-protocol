@@ -257,6 +257,7 @@ export const dictionary = {
     // Dual view
     viewFeed: text("피드", "Feed", "Feed"),
     viewBoard: text("게시판", "Board", "Tablero"),
+    sortRecommended: text("추천순", "Recommended", "Recomendado"),
     sortLatest: text("최신순", "Latest", "Más reciente"),
     sortPopular: text("인기순", "Popular", "Popular"),
     sortComments: text("댓글순", "Most comments", "Más comentarios"),

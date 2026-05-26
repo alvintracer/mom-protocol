@@ -2,7 +2,7 @@
 
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 
-export type BoardSortKey = "latest" | "popular" | "comments" | "energy";
+export type BoardSortKey = "recommended" | "latest" | "popular" | "comments" | "energy";
 
 type BoardSortBarProps = {
   value: BoardSortKey;
@@ -10,14 +10,14 @@ type BoardSortBarProps = {
 };
 
 /**
- * BoardSortBar — Pill-style sort options for the board view.
- * Compact, sits below the topic chip bar.
+ * BoardSortBar — Pill-style sort options for feed/board views.
  */
 export function BoardSortBar({ value, onChange }: BoardSortBarProps) {
   const { dictionary, t } = useI18n();
   const d = dictionary.home;
 
   const options: { key: BoardSortKey; label: string }[] = [
+    { key: "recommended", label: t(d.sortRecommended) },
     { key: "latest", label: t(d.sortLatest) },
     { key: "popular", label: t(d.sortPopular) },
     { key: "comments", label: t(d.sortComments) },

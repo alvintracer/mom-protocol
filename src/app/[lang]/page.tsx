@@ -66,10 +66,15 @@ function HomeFeed() {
   const setViewMode = useCallback((m: ViewMode) => {
     setViewModeState(m);
     window.localStorage.setItem(VIEW_MODE_KEY, m);
+    // Reset sort default per view mode
+    setBoardSort(m === "board" ? "latest" : "recommended");
   }, []);
 
-  // Board sort
-  const [boardSort, setBoardSort] = useState<BoardSortKey>("latest");
+  // Board sort — default depends on view mode
+  const [boardSort, setBoardSort] = useState<BoardSortKey>(() =>
+    (typeof window !== "undefined" && window.localStorage.getItem(VIEW_MODE_KEY) === "feed")
+      ? "recommended" : "latest"
+  );
 
   // Ad interval from site_config
   const [adInterval, setAdInterval] = useState({ feed: 5, board: 10 });
@@ -438,7 +443,7 @@ function HomeFeed() {
 
   // Board-mode sorting (client-side re-order of displayPosts)
   const sortedPosts = useMemo(() => {
-    if (viewMode !== "board" || boardSort === "latest") return displayPosts;
+    if (boardSort === "latest" || boardSort === "recommended") return displayPosts;
     const sorted = [...displayPosts];
     switch (boardSort) {
       case "popular":
@@ -535,7 +540,7 @@ function HomeFeed() {
       </div>
 
       {/* ─── Board Sort Bar (board mode only) ─── */}
-      {viewMode === "board" && !isLoadingPosts && sortedPosts.length > 0 && (
+      {!isLoadingPosts && sortedPosts.length > 0 && (
         <BoardSortBar value={boardSort} onChange={setBoardSort} />
       )}
 

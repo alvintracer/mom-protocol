@@ -784,9 +784,18 @@ export function PostDetailClient({
                 <textarea
                   value={reply}
                   onChange={(event) => setReply(event.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (reply.trim() && !isSubmitting) {
+                        const form = (e.target as HTMLElement).closest("form");
+                        form?.requestSubmit();
+                      }
+                    }
+                  }}
                   placeholder={t(dictionary.postDetail.replyPlaceholder)}
-                  rows={3}
-                  className="min-h-20 w-full resize-none bg-transparent text-[17px] font-medium leading-7 text-foreground outline-none placeholder:text-muted-foreground"
+                  rows={2}
+                  className="min-h-14 w-full resize-none bg-transparent text-[17px] font-medium leading-7 text-foreground outline-none placeholder:text-muted-foreground"
                 />
                 <div className="mt-3 flex justify-end">
                   <button
