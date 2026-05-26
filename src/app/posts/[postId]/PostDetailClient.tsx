@@ -55,6 +55,7 @@ export function PostDetailClient({
   const [userId, setUserId] = useState<string | null>(null);
   const [hasLiked, setHasLiked] = useState(false);
   const [reply, setReply] = useState("");
+  const [replyToComment, setReplyToComment] = useState<{ id: string; authorName: string } | null>(null);
   const [quoteBody, setQuoteBody] = useState("");
   const [isQuoteOpen, setIsQuoteOpen] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "missing">(
@@ -347,15 +348,19 @@ export function PostDetailClient({
 
     setIsSubmitting(true);
     const supabase = createClient();
+    const insertData: Record<string, unknown> = {
+      post_id: post.id,
+      user_id: userId,
+      original_language: language as SupportedLanguage,
+      original_body: reply.trim(),
+      translation_status: "pending",
+    };
+    if (replyToComment) {
+      insertData.parent_comment_id = replyToComment.id;
+    }
     const { data, error } = await supabase
       .from("comments")
-      .insert({
-        post_id: post.id,
-        user_id: userId,
-        original_language: language as SupportedLanguage,
-        original_body: reply.trim(),
-        translation_status: "pending",
-      })
+      .insert(insertData as any)
       .select("*")
       .single();
 
@@ -371,11 +376,20 @@ export function PostDetailClient({
       }),
     ]);
 
+    // Add current user's profile to commentAuthors if missing
+    if (!commentAuthors.has(userId)) {
+      const { data: myProfile } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+      if (myProfile) {
+        setCommentAuthors((prev) => new Map(prev).set(userId, myProfile));
+      }
+    }
+
     setComments((current) => [...current, data]);
     setPost((current) =>
       current ? { ...current, comment_count: current.comment_count + 1 } : current,
     );
     setReply("");
+    setReplyToComment(null);
     setIsSubmitting(false);
   }
 
@@ -781,7 +795,15 @@ export function PostDetailClient({
                 {t(dictionary.common.me).slice(0, 1)}
               </div>
               <div className="min-w-0 flex-1">
+                {/* Reply-to indicator */}
+                {replyToComment && (
+                  <div className="mb-2 flex items-center gap-2 text-xs font-bold text-blue-500">
+                    <span>↩ {replyToComment.authorName}에게 {t(dictionary.postDetail.subReply)}</span>
+                    <button onClick={() => setReplyToComment(null)} className="text-muted-foreground hover:text-foreground">✕</button>
+                  </div>
+                )}
                 <textarea
+                  id="comment-textarea"
                   value={reply}
                   onChange={(event) => setReply(event.target.value)}
                   onKeyDown={(e) => {
@@ -793,7 +815,7 @@ export function PostDetailClient({
                       }
                     }
                   }}
-                  placeholder={t(dictionary.postDetail.replyPlaceholder)}
+                  placeholder={replyToComment ? t(dictionary.postDetail.subReplyPlaceholder) : t(dictionary.postDetail.replyPlaceholder)}
                   rows={2}
                   className="min-h-14 w-full resize-none bg-transparent text-[17px] font-medium leading-7 text-foreground outline-none placeholder:text-muted-foreground"
                 />
@@ -822,40 +844,95 @@ export function PostDetailClient({
 
       <section className="divide-y divide-border">
         {comments.length > 0 ? (
-          comments.map((comment) => {
-            const commentAuthor = commentAuthors.get(comment.user_id) ?? null;
-            const commentAuthorLabel =
-              commentAuthor?.display_name ??
-              commentAuthor?.handle ??
-              `u/${comment.user_id.slice(0, 8)}`;
+          (() => {
+            // Separate top-level comments and sub-replies
+            const topLevel = comments.filter((c) => !(c as any).parent_comment_id);
+            const subReplies = comments.filter((c) => (c as any).parent_comment_id);
+            const repliesByParent = new Map<string, CommentRow[]>();
+            for (const sr of subReplies) {
+              const pid = (sr as any).parent_comment_id as string;
+              if (!repliesByParent.has(pid)) repliesByParent.set(pid, []);
+              repliesByParent.get(pid)!.push(sr);
+            }
 
-            return (
-              <article key={comment.id} className="p-4 sm:p-6">
-                <div className="flex gap-3">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-black text-white">
-                    {initial(commentAuthorLabel)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-1.5 text-sm">
-                      <span className="font-bold text-foreground">
-                        {commentAuthorLabel}
-                      </span>
-                      <span className="text-muted-foreground">
-                        · {formatDate(comment.created_at, language)}
-                      </span>
+            return topLevel.map((comment) => {
+              const commentAuthor = commentAuthors.get(comment.user_id) ?? null;
+              const commentAuthorLabel =
+                commentAuthor?.display_name ??
+                commentAuthor?.handle ??
+                `u/${comment.user_id.slice(0, 8)}`;
+              const childReplies = repliesByParent.get(comment.id) ?? [];
+
+              return (
+                <article key={comment.id} className="p-4 sm:p-6">
+                  {/* Top-level comment */}
+                  <div className="flex gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-black text-white dark:bg-zinc-200 dark:text-zinc-900">
+                      {initial(commentAuthorLabel)}
                     </div>
-                    <p className="mt-2 whitespace-pre-wrap text-[15px] leading-6 text-foreground">
-                      {getCommentBody(comment.id, comment.original_body)}
-                    </p>
-                    <div className="mt-2 flex items-center gap-5 text-muted-foreground">
-                      <ActionIcon icon={<RiMessage2Line className="size-4" />} />
-                      <ActionIcon icon={<RiHeart3Line className="size-4" />} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-1.5 text-sm">
+                        <span className="font-bold text-foreground">
+                          {commentAuthorLabel}
+                        </span>
+                        <span className="text-muted-foreground">
+                          · {formatDate(comment.created_at, language)}
+                        </span>
+                      </div>
+                      <p className="mt-2 whitespace-pre-wrap text-[15px] leading-6 text-foreground">
+                        {getCommentBody(comment.id, comment.original_body)}
+                      </p>
+                      <div className="mt-2 flex items-center gap-5 text-muted-foreground">
+                        <button
+                          onClick={() => {
+                            setReplyToComment({ id: comment.id, authorName: commentAuthorLabel });
+                            setReply("");
+                            // Focus the textarea
+                            setTimeout(() => {
+                              const ta = document.querySelector<HTMLTextAreaElement>("#comment-textarea");
+                              ta?.focus();
+                            }, 100);
+                          }}
+                          className="flex items-center gap-1 text-xs font-bold hover:text-blue-500 transition-colors"
+                        >
+                          <RiMessage2Line className="size-4" />
+                          {t(dictionary.postDetail.subReply)}
+                          {childReplies.length > 0 && <span className="text-blue-500">{childReplies.length}</span>}
+                        </button>
+                        <ActionIcon icon={<RiHeart3Line className="size-4" />} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              </article>
-            );
-          })
+
+                  {/* Sub-replies (대댓글) */}
+                  {childReplies.length > 0 && (
+                    <div className="mt-3 ml-12 space-y-3 border-l-2 border-border pl-4">
+                      {childReplies.map((sr) => {
+                        const srAuthor = commentAuthors.get(sr.user_id) ?? null;
+                        const srLabel = srAuthor?.display_name ?? srAuthor?.handle ?? `u/${sr.user_id.slice(0, 8)}`;
+                        return (
+                          <div key={sr.id} className="flex gap-2">
+                            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-[10px] font-black text-white dark:bg-zinc-300 dark:text-zinc-900">
+                              {initial(srLabel)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-x-1.5 text-[13px]">
+                                <span className="font-bold text-foreground">{srLabel}</span>
+                                <span className="text-muted-foreground">· {formatDate(sr.created_at, language)}</span>
+                              </div>
+                              <p className="mt-1 whitespace-pre-wrap text-[14px] leading-5 text-foreground">
+                                {getCommentBody(sr.id, sr.original_body)}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </article>
+              );
+            });
+          })()
         ) : (
           <p className="p-6 text-sm font-semibold text-muted-foreground">
             {t(dictionary.postDetail.emptyReplies)}

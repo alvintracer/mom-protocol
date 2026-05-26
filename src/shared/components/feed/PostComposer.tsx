@@ -116,6 +116,7 @@ export function PostComposer({
       authorHandle: "me",
       avatarInitials: t(dictionary.common.me).slice(0, 1),
       createdAtLabel: dictionary.common.now,
+      createdAt: new Date().toISOString(),
       linkedEventId: linkedAttention?.id ?? null,
       selectedOutcome: selectedOutcome || null,
       postKind: "post",

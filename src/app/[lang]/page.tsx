@@ -441,11 +441,14 @@ function HomeFeed() {
     });
   }, [posts, activeTopicFilter]);
 
-  // Board-mode sorting (client-side re-order of displayPosts)
+  // Sorting (client-side re-order of displayPosts)
   const sortedPosts = useMemo(() => {
-    if (boardSort === "latest" || boardSort === "recommended") return displayPosts;
+    if (boardSort === "recommended") return displayPosts;
     const sorted = [...displayPosts];
     switch (boardSort) {
+      case "latest":
+        sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        break;
       case "popular":
         sorted.sort((a, b) => (b.likeCount + b.viewCount * 0.1) - (a.likeCount + a.viewCount * 0.1));
         break;
@@ -464,7 +467,7 @@ function HomeFeed() {
     const pinned = sorted.filter((p) => p.isPinned);
     const rest = sorted.filter((p) => !p.isPinned);
     return [...pinned, ...rest];
-  }, [displayPosts, viewMode, boardSort, eventsMap]);
+  }, [displayPosts, boardSort, eventsMap]);
 
   return (
     <div className="pb-20">
@@ -667,6 +670,7 @@ function mapPostRowToSocialPost(
       formatRelative(row.created_at, "en-US"),
       formatRelative(row.created_at, "es-ES"),
     ),
+    createdAt: row.created_at,
     linkedEventId: row.attention_cluster_id,
     selectedOutcome: row.selected_outcome,
     postKind: row.post_kind as "post" | "reply" | "repost" | "quote",

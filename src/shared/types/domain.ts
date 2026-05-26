@@ -121,6 +121,7 @@ export type SocialPost = {
   authorHandle: string;
   avatarInitials: string;
   createdAtLabel: LocalizedText;
+  createdAt: string;
   linkedEventId: string | null;
   selectedOutcome: string | null;
   postKind: "post" | "reply" | "repost" | "quote";
