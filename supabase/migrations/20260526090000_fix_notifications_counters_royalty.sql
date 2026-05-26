@@ -185,7 +185,10 @@ BEGIN
 
   -- Grant energy to commenter
   IF v_account_age >= INTERVAL '24 hours' THEN
-    PERFORM public.apply_attention_energy_delta(target_cluster_id, NEW.user_id, energy_delta, 'comment');
+    PERFORM public.apply_attention_energy_delta(
+      target_cluster_id, NEW.user_id, 'comment', energy_delta,
+      0, 1, jsonb_build_object('comment_id', NEW.id, 'post_id', NEW.post_id)
+    );
   END IF;
 
   -- Builder royalty
