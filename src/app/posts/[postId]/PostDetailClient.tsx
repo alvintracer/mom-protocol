@@ -2,18 +2,21 @@
 
 import Link from "next/link";
 import { notFound, useRouter } from "next/navigation";
-import { use, useEffect, useMemo, useState, type FormEvent } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   RiArrowLeftLine,
   RiBarChartGroupedLine,
   RiBookmarkFill,
   RiBookmarkLine,
+  RiDeleteBinLine,
+  RiEditLine,
   RiHashtag,
   RiHeart3Fill,
   RiHeart3Line,
   RiLinksLine,
   RiLock2Line,
   RiMessage2Line,
+  RiMore2Fill,
   RiRepeat2Line,
   RiSendPlane2Line,
   RiShareForwardLine,
@@ -62,6 +65,10 @@ export function PostDetailClient({
     "loading",
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState("");
+  const [commentMenuOpen, setCommentMenuOpen] = useState<string | null>(null);
+  const commentFormRef = useRef<HTMLFormElement>(null);
   const [isReposting, setIsReposting] = useState(false);
   // Premium state
   const [canViewFull, setCanViewFull] = useState(true);
@@ -391,6 +398,41 @@ export function PostDetailClient({
     setReply("");
     setReplyToComment(null);
     setIsSubmitting(false);
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    if (!confirm(t(dictionary.postDetail.confirmDeleteComment))) return;
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("comments")
+      .update({ is_deleted: true } as any)
+      .eq("id", commentId);
+    if (error) return;
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+    setPost((current) =>
+      current ? { ...current, comment_count: Math.max(0, current.comment_count - 1) } : current,
+    );
+  }
+
+  async function handleEditComment(commentId: string) {
+    if (!editBody.trim()) return;
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("comments")
+      .update({ original_body: editBody.trim(), translation_status: "pending" as any } as any)
+      .eq("id", commentId);
+    if (error) return;
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === commentId ? { ...c, original_body: editBody.trim() } : c,
+      ),
+    );
+    // Re-queue translations
+    (supabase as any).rpc("enqueue_missing_translations_for_comment", {
+      target_comment_id: commentId,
+    });
+    setEditingCommentId(null);
+    setEditBody("");
   }
 
   async function handleLike() {
@@ -790,7 +832,7 @@ export function PostDetailClient({
       ) : (
         <section className="border-b border-border p-4 sm:p-6">
           {userId ? (
-            <form onSubmit={handleReply} className="flex gap-3">
+            <form ref={commentFormRef} onSubmit={handleReply} className="flex gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-black text-background">
                 {t(dictionary.common.me).slice(0, 1)}
               </div>
@@ -810,8 +852,7 @@ export function PostDetailClient({
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       if (reply.trim() && !isSubmitting) {
-                        const form = (e.target as HTMLElement).closest("form");
-                        form?.requestSubmit();
+                        commentFormRef.current?.requestSubmit();
                       }
                     }
                   }}
@@ -878,10 +919,72 @@ export function PostDetailClient({
                         <span className="text-muted-foreground">
                           · {formatDate(comment.created_at, language)}
                         </span>
+                        {/* Edit/Delete menu for own comments */}
+                        {comment.user_id === userId && (
+                          <div className="relative ml-auto">
+                            <button
+                              onClick={() => setCommentMenuOpen(commentMenuOpen === comment.id ? null : comment.id)}
+                              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-zinc-100 hover:text-foreground dark:hover:bg-zinc-800"
+                            >
+                              <RiMore2Fill className="size-4" />
+                            </button>
+                            {commentMenuOpen === comment.id && (
+                              <div className="absolute right-0 top-8 z-20 min-w-[120px] rounded-xl border border-border bg-background py-1 shadow-lg">
+                                <button
+                                  onClick={() => {
+                                    setEditingCommentId(comment.id);
+                                    setEditBody(comment.original_body);
+                                    setCommentMenuOpen(null);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-sm font-bold text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                >
+                                  <RiEditLine className="size-4" />
+                                  {t(dictionary.postDetail.editComment)}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setCommentMenuOpen(null);
+                                    handleDeleteComment(comment.id);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-sm font-bold text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                >
+                                  <RiDeleteBinLine className="size-4" />
+                                  {t(dictionary.postDetail.deleteComment)}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <p className="mt-2 whitespace-pre-wrap text-[15px] leading-6 text-foreground">
-                        {getCommentBody(comment.id, comment.original_body)}
-                      </p>
+                      {editingCommentId === comment.id ? (
+                        <div className="mt-2">
+                          <textarea
+                            value={editBody}
+                            onChange={(e) => setEditBody(e.target.value)}
+                            rows={3}
+                            className="w-full resize-none rounded-lg border border-border bg-transparent px-3 py-2 text-[15px] leading-6 text-foreground outline-none focus:border-blue-500"
+                          />
+                          <div className="mt-2 flex justify-end gap-2">
+                            <button
+                              onClick={() => { setEditingCommentId(null); setEditBody(""); }}
+                              className="rounded-full px-3 py-1.5 text-xs font-bold text-muted-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                            >
+                              {t(dictionary.postDetail.cancelEdit)}
+                            </button>
+                            <button
+                              onClick={() => handleEditComment(comment.id)}
+                              disabled={!editBody.trim()}
+                              className="rounded-full bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {t(dictionary.postDetail.saveEdit)}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="mt-2 whitespace-pre-wrap text-[15px] leading-6 text-foreground">
+                          {getCommentBody(comment.id, comment.original_body)}
+                        </p>
+                      )}
                       <div className="mt-2 flex items-center gap-5 text-muted-foreground">
                         <button
                           onClick={() => {
@@ -919,10 +1022,72 @@ export function PostDetailClient({
                               <div className="flex flex-wrap items-center gap-x-1.5 text-[13px]">
                                 <span className="font-bold text-foreground">{srLabel}</span>
                                 <span className="text-muted-foreground">· {formatDate(sr.created_at, language)}</span>
+                                {/* Edit/Delete for own sub-replies */}
+                                {sr.user_id === userId && (
+                                  <div className="relative ml-auto">
+                                    <button
+                                      onClick={() => setCommentMenuOpen(commentMenuOpen === sr.id ? null : sr.id)}
+                                      className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-zinc-100 hover:text-foreground dark:hover:bg-zinc-800"
+                                    >
+                                      <RiMore2Fill className="size-3.5" />
+                                    </button>
+                                    {commentMenuOpen === sr.id && (
+                                      <div className="absolute right-0 top-6 z-20 min-w-[110px] rounded-xl border border-border bg-background py-1 shadow-lg">
+                                        <button
+                                          onClick={() => {
+                                            setEditingCommentId(sr.id);
+                                            setEditBody(sr.original_body);
+                                            setCommentMenuOpen(null);
+                                          }}
+                                          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs font-bold text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                        >
+                                          <RiEditLine className="size-3.5" />
+                                          {t(dictionary.postDetail.editComment)}
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setCommentMenuOpen(null);
+                                            handleDeleteComment(sr.id);
+                                          }}
+                                          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                        >
+                                          <RiDeleteBinLine className="size-3.5" />
+                                          {t(dictionary.postDetail.deleteComment)}
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
-                              <p className="mt-1 whitespace-pre-wrap text-[14px] leading-5 text-foreground">
-                                {getCommentBody(sr.id, sr.original_body)}
-                              </p>
+                              {editingCommentId === sr.id ? (
+                                <div className="mt-1">
+                                  <textarea
+                                    value={editBody}
+                                    onChange={(e) => setEditBody(e.target.value)}
+                                    rows={2}
+                                    className="w-full resize-none rounded-lg border border-border bg-transparent px-2 py-1.5 text-[14px] leading-5 text-foreground outline-none focus:border-blue-500"
+                                  />
+                                  <div className="mt-1.5 flex justify-end gap-2">
+                                    <button
+                                      onClick={() => { setEditingCommentId(null); setEditBody(""); }}
+                                      className="rounded-full px-2.5 py-1 text-[11px] font-bold text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                    >
+                                      {t(dictionary.postDetail.cancelEdit)}
+                                    </button>
+                                    <button
+                                      onClick={() => handleEditComment(sr.id)}
+                                      disabled={!editBody.trim()}
+                                      className="rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                                    >
+                                      {t(dictionary.postDetail.saveEdit)}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="mt-1 whitespace-pre-wrap text-[14px] leading-5 text-foreground">
+                                  {getCommentBody(sr.id, sr.original_body)}
+                                </p>
+                              )}
                             </div>
                           </div>
                         );

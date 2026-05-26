@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { SocialPostCard } from "@/shared/components/feed/SocialPostCard";
 import { BoardRow } from "@/shared/components/feed/BoardRow";
 import { BoardSortBar, type BoardSortKey } from "@/shared/components/feed/BoardSortBar";
@@ -47,6 +47,7 @@ const VIEW_MODE_KEY = "momment.viewMode";
 function HomeFeed() {
   const { dictionary, t, language } = useI18n();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const activeFeed = searchParams.get("feed") === "following" ? "following" : "for-you";
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [posts, setPosts] = useState<SocialPost[]>([]);
@@ -54,6 +55,9 @@ function HomeFeed() {
   const [eventsMap, setEventsMap] = useState<Map<string, Event>>(new Map());
   const [userTopics, setUserTopics] = useState<{ slug: string; label: string; score: number }[]>([]);
   const [activeTopicFilter, setActiveTopicFilter] = useState<string | null>(null);
+
+  // Track whether user had a saved preference (for onboarding banner)
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // View mode: default based on language
   const [viewMode, setViewModeState] = useState<ViewMode>(() => {
@@ -63,9 +67,21 @@ function HomeFeed() {
     }
     return language === "ko" ? "board" : "feed";
   });
+
+  // Check for first visit (no saved preference)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem(VIEW_MODE_KEY);
+      if (!saved) {
+        setShowOnboarding(true);
+      }
+    }
+  }, []);
+
   const setViewMode = useCallback((m: ViewMode) => {
     setViewModeState(m);
     window.localStorage.setItem(VIEW_MODE_KEY, m);
+    setShowOnboarding(false);
     // Reset sort default per view mode
     setBoardSort(m === "board" ? "latest" : "recommended");
   }, []);
@@ -75,6 +91,13 @@ function HomeFeed() {
     (typeof window !== "undefined" && window.localStorage.getItem(VIEW_MODE_KEY) === "feed")
       ? "recommended" : "latest"
   );
+
+  // In feed view, boardSort should always be "recommended"
+  useEffect(() => {
+    if (viewMode === "feed" && boardSort !== "recommended") {
+      setBoardSort("recommended");
+    }
+  }, [viewMode, boardSort]);
 
   // Ad interval from site_config
   const [adInterval, setAdInterval] = useState({ feed: 5, board: 10 });
@@ -473,11 +496,120 @@ function HomeFeed() {
     <div className="pb-20">
       {isLoadingPosts ? <LoadingBar /> : null}
 
-      {/* ─── View Toggle + Topic Chips ─── */}
-      <div className="border-b border-border px-4 py-2 sm:px-5 flex items-center gap-2">
-        {/* Topic chips (scrollable, takes remaining space) */}
-        {userTopics.length > 0 && activeFeed === "for-you" ? (
-          <div className="flex-1 min-w-0 overflow-x-auto no-scrollbar">
+      {/* ─── 1. Primary View Toggle (Feed / Board) — Twitter-style top tabs ─── */}
+      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border">
+        <div className="grid grid-cols-2">
+          <button
+            onClick={() => setViewMode("feed")}
+            className={`relative flex items-center justify-center gap-1.5 py-3.5 text-sm font-bold transition-colors ${
+              viewMode === "feed"
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+            }`}
+          >
+            <RiLayoutGridLine className="size-4" />
+            {t(dictionary.home.viewFeed)}
+            {viewMode === "feed" && (
+              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[3px] w-14 rounded-full bg-blue-500" />
+            )}
+          </button>
+          <button
+            onClick={() => setViewMode("board")}
+            className={`relative flex items-center justify-center gap-1.5 py-3.5 text-sm font-bold transition-colors ${
+              viewMode === "board"
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+            }`}
+          >
+            <RiListUnordered className="size-4" />
+            {t(dictionary.home.viewBoard)}
+            {viewMode === "board" && (
+              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[3px] w-14 rounded-full bg-blue-500" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* ─── Onboarding Banner (first visit, no saved preference) ─── */}
+      {showOnboarding && (
+        <div className="mx-4 mt-3 mb-1 sm:mx-5">
+          <div className="rounded-2xl border border-border bg-background p-4 sm:p-5">
+            <p className="text-sm font-black text-foreground mb-3">
+              {t(dictionary.home.viewModePrompt)}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setViewMode("feed")}
+                className="flex flex-col items-center gap-2 rounded-xl border border-border bg-zinc-50 dark:bg-zinc-900 p-4 transition-all hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950"
+              >
+                <RiLayoutGridLine className="size-7 text-blue-500" />
+                <span className="text-xs font-bold text-foreground">
+                  {t(dictionary.home.viewFeed)}
+                </span>
+                <span className="text-[11px] leading-tight text-muted-foreground text-center">
+                  {t(dictionary.home.viewModeFeedDesc)}
+                </span>
+              </button>
+              <button
+                onClick={() => setViewMode("board")}
+                className="flex flex-col items-center gap-2 rounded-xl border border-border bg-zinc-50 dark:bg-zinc-900 p-4 transition-all hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950"
+              >
+                <RiListUnordered className="size-7 text-blue-500" />
+                <span className="text-xs font-bold text-foreground">
+                  {t(dictionary.home.viewBoard)}
+                </span>
+                <span className="text-[11px] leading-tight text-muted-foreground text-center">
+                  {t(dictionary.home.viewModeBoardDesc)}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 2. Feed View: Sub-tabs (추천 / 팔로잉) ─── */}
+      {viewMode === "feed" && (
+        <div className="border-b border-border">
+          <div className="grid grid-cols-2">
+            <button
+              onClick={() => router.push("/?feed=for-you")}
+              className={`relative py-2.5 text-[13px] font-bold transition-colors ${
+                activeFeed === "for-you"
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+              }`}
+            >
+              {t(dictionary.home.forYou)}
+              {activeFeed === "for-you" && (
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[2px] w-10 rounded-full bg-blue-500" />
+              )}
+            </button>
+            <button
+              onClick={() => router.push("/?feed=following")}
+              className={`relative py-2.5 text-[13px] font-bold transition-colors ${
+                activeFeed === "following"
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+              }`}
+            >
+              {t(dictionary.home.following)}
+              {activeFeed === "following" && (
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[2px] w-10 rounded-full bg-blue-500" />
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 3. Board View: Sort pills (최신순 | 추천순 | 인기순 | 댓글순 | 에너지순) ─── */}
+      {viewMode === "board" && !isLoadingPosts && sortedPosts.length > 0 && (
+        <BoardSortBar value={boardSort} onChange={setBoardSort} />
+      )}
+
+      {/* ─── Topic Chips ─── */}
+      {userTopics.length > 0 && (viewMode === "board" || activeFeed === "for-you") && (
+        <div className="border-b border-border px-4 py-2 sm:px-5">
+          <div className="overflow-x-auto no-scrollbar">
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setActiveTopicFilter(null)}
@@ -509,49 +641,14 @@ function HomeFeed() {
               ))}
             </div>
           </div>
-        ) : (
-          <div className="flex-1" />
-        )}
-
-        {/* View toggle */}
-        <div className="flex items-center shrink-0 rounded-lg border border-border p-0.5">
-          <button
-            onClick={() => setViewMode("feed")}
-            className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold transition-all ${
-              viewMode === "feed"
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            title={t(dictionary.home.viewFeed)}
-          >
-            <RiLayoutGridLine className="size-3.5" />
-            <span className="hidden sm:inline">{t(dictionary.home.viewFeed)}</span>
-          </button>
-          <button
-            onClick={() => setViewMode("board")}
-            className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold transition-all ${
-              viewMode === "board"
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            title={t(dictionary.home.viewBoard)}
-          >
-            <RiListUnordered className="size-3.5" />
-            <span className="hidden sm:inline">{t(dictionary.home.viewBoard)}</span>
-          </button>
         </div>
-      </div>
-
-      {/* ─── Board Sort Bar (board mode only) ─── */}
-      {!isLoadingPosts && sortedPosts.length > 0 && (
-        <BoardSortBar value={boardSort} onChange={setBoardSort} />
       )}
 
       <div className={viewMode === "feed" ? "divide-y divide-border" : ""}>
         {isLoadingPosts ? (
           <FeedSkeleton />
         ) : null}
-        {!isLoadingPosts && activeFeed === "following" && !authUser ? (
+        {!isLoadingPosts && viewMode === "feed" && activeFeed === "following" && !authUser ? (
           <EmptyFeed
             title={t(dictionary.home.followingSignInTitle)}
             description={t(dictionary.home.followingEmptyDesc)}
@@ -560,6 +657,7 @@ function HomeFeed() {
           />
         ) : null}
         {!isLoadingPosts &&
+        viewMode === "feed" &&
         activeFeed === "following" &&
         authUser &&
         posts.length === 0 ? (

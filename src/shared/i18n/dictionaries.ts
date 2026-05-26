@@ -262,6 +262,9 @@ export const dictionary = {
     sortPopular: text("인기순", "Popular", "Popular"),
     sortComments: text("댓글순", "Most comments", "Más comentarios"),
     sortEnergy: text("에너지순", "Energy", "Energía"),
+    viewModePrompt: text("어떤 뷰가 편하세요?", "Which view do you prefer?", "¿Qué vista prefieres?"),
+    viewModeFeedDesc: text("SNS처럼 카드형 피드", "Card-style feed like social media", "Feed de tarjetas como redes sociales"),
+    viewModeBoardDesc: text("커뮤니티 게시판형", "Community board style", "Estilo de tablero comunitario"),
   },
   postCreate: {
     backLabel: text("포스트", "Post", "Post"),
@@ -403,6 +406,15 @@ export const dictionary = {
       "MOM 에너지가 부족합니다.",
       "Insufficient MOM energy.",
       "Energía MOM insuficiente.",
+    ),
+    editComment: text("수정", "Edit", "Editar"),
+    deleteComment: text("삭제", "Delete", "Eliminar"),
+    saveEdit: text("저장", "Save", "Guardar"),
+    cancelEdit: text("취소", "Cancel", "Cancelar"),
+    confirmDeleteComment: text(
+      "댓글을 삭제하시겠습니까?",
+      "Delete this comment?",
+      "¿Eliminar este comentario?",
     ),
   },
   attentionDetail: {
