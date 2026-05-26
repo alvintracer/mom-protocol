@@ -1837,6 +1837,13 @@ export const dictionary = {
       repostMyPost: text("내 포스트 리포스트/인용", "Repost/Quote my post", "Repost/Citar mi post"),
       commentMyPost: text("내 포스트에 댓글", "Comment on my post", "Comentar en mi post"),
       reactionMyPost: text("내 포스트에 리액션", "Reaction on my post", "Reacción en mi post"),
+      commentRoyalty: text("댓글 로열티", "Comment Royalty", "Regalía de Comentario"),
+      commentRoyaltyDesc: text(
+        "내 댓글에 대댓글이 달리면 보상을 받습니다.",
+        "Earn rewards when others reply to your comment.",
+        "Gana recompensas cuando otros respondan a tu comentario.",
+      ),
+      subReplyMyComment: text("내 댓글에 대댓글", "Sub-reply to my comment", "Sub-respuesta a mi comentario"),
     },
     referral: {
       title: text("레퍼럴 프로그램", "Referral Program", "Programa de Referidos"),

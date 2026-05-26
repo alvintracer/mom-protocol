@@ -496,8 +496,8 @@ function HomeFeed() {
     <div className="pb-20">
       {isLoadingPosts ? <LoadingBar /> : null}
 
-      {/* ─── 1. Primary View Toggle (Feed / Board) — Twitter-style top tabs ─── */}
-      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border">
+      {/* ─── 1. Primary View Toggle (Feed / Board) ─── */}
+      <div className="border-b border-border">
         <div className="grid grid-cols-2">
           <button
             onClick={() => setViewMode("feed")}

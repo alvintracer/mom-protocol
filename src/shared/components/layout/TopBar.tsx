@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { RiAddLine } from "react-icons/ri";
 
 import { useI18n } from "@/shared/i18n/LanguageProvider";
@@ -20,8 +20,6 @@ type PlatformVaultOverview = {
 export function TopBar() {
   const { dictionary, t } = useI18n();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const activeFeed = searchParams.get("feed") === "following" ? "following" : "for-you";
   const [platformStats, setPlatformStats] = useState<{ vault: number; supply: number; rate: number } | null>(null);
 
   useEffect(() => {
@@ -113,36 +111,6 @@ export function TopBar() {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex w-full mt-1">
-          <Link
-            href="/"
-            className={`flex-1 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors relative flex items-center justify-center h-[53px] ${
-              activeFeed === "for-you" ? "text-foreground" : "text-muted-foreground"
-            }`}
-          >
-            <span className="font-bold relative h-full flex items-center">
-              {t(dictionary.home.forYou)}
-              {activeFeed === "for-you" ? (
-                <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500 rounded-full" />
-              ) : null}
-            </span>
-          </Link>
-          <Link
-            href="/?feed=following"
-            className={`flex-1 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors relative flex items-center justify-center h-[53px] ${
-              activeFeed === "following" ? "text-foreground" : "text-muted-foreground"
-            }`}
-          >
-            <span className="font-bold relative h-full flex items-center">
-              {t(dictionary.home.following)}
-              {activeFeed === "following" ? (
-                <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500 rounded-full" />
-              ) : null}
-            </span>
-          </Link>
         </div>
       </div>
     </header>
