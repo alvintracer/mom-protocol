@@ -603,7 +603,7 @@ function HomeFeed() {
 
       {/* ─── 3. Board View: Sort pills (최신순 | 추천순 | 인기순 | 댓글순 | 에너지순) ─── */}
       {viewMode === "board" && !isLoadingPosts && sortedPosts.length > 0 && (
-        <BoardSortBar value={boardSort} onChange={setBoardSort} />
+        <BoardSortBar value={boardSort} onChange={setBoardSort} excludeRecommended />
       )}
 
       {/* ─── Topic Chips ─── */}

@@ -7,22 +7,25 @@ export type BoardSortKey = "recommended" | "latest" | "popular" | "comments" | "
 type BoardSortBarProps = {
   value: BoardSortKey;
   onChange: (key: BoardSortKey) => void;
+  excludeRecommended?: boolean;
 };
 
 /**
  * BoardSortBar — Pill-style sort options for feed/board views.
  */
-export function BoardSortBar({ value, onChange }: BoardSortBarProps) {
+export function BoardSortBar({ value, onChange, excludeRecommended = false }: BoardSortBarProps) {
   const { dictionary, t } = useI18n();
   const d = dictionary.home;
 
-  const options: { key: BoardSortKey; label: string }[] = [
+  const allOptions: { key: BoardSortKey; label: string }[] = [
     { key: "recommended", label: t(d.sortRecommended) },
     { key: "latest", label: t(d.sortLatest) },
     { key: "popular", label: t(d.sortPopular) },
     { key: "comments", label: t(d.sortComments) },
     { key: "energy", label: t(d.sortEnergy) },
   ];
+
+  const options = excludeRecommended ? allOptions.filter((o) => o.key !== "recommended") : allOptions;
 
   return (
     <div className="flex items-center gap-1 px-4 py-2 sm:px-5 border-b border-border overflow-x-auto no-scrollbar">
