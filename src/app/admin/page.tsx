@@ -444,6 +444,24 @@ export default function AdminPage() {
         <AdNetworkPanel />
       </section>
 
+      {/* ─── QA Board ─── */}
+      <section className="rounded-2xl border border-border bg-background p-5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-black text-foreground">🐛 QA 보드</h2>
+            <p className="mt-1 text-sm font-semibold leading-6 text-muted-foreground">
+              버그, 개선사항을 채팅처럼 올리고 관리합니다. 미해결 항목을 한번에 복사해서 LLM에 전달할 수 있습니다.
+            </p>
+          </div>
+          <a
+            href="/admin/qa"
+            className="flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white transition-colors hover:bg-blue-700"
+          >
+            QA 보드 열기 →
+          </a>
+        </div>
+      </section>
+
       {/* ─── Community Seeding ─── */}
       <section className="rounded-2xl border border-border bg-background p-5 shadow-sm">
         <h2 className="text-lg font-black text-foreground">🤖 커뮤니티 시딩</h2>

@@ -240,6 +240,10 @@ export function PostDetailClient({
 
       setStatus("ready");
 
+      // Record view (RPC added in migration, type not yet generated)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any).rpc("record_post_view", { target_post_id: postId });
+
       // Fetch similar posts based on shared topics
       if (topicLinks && (topicLinks as unknown[]).length > 0) {
         const topicIds = (topicLinks as unknown as { source: string; topics: { canonical_label: string } }[]).map(() => "");
@@ -361,14 +365,10 @@ export function PostDetailClient({
     }
 
     await Promise.all([
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // Translation only — comment_count is updated by DB trigger
       (supabase as any).rpc("enqueue_missing_translations_for_comment", {
         target_comment_id: data.id,
       }),
-      supabase
-        .from("posts")
-        .update({ comment_count: post.comment_count + 1 })
-        .eq("id", post.id),
     ]);
 
     setComments((current) => [...current, data]);
