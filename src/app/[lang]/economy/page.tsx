@@ -205,6 +205,7 @@ function EarningTab() {
             [t(ep.earning.post), <Badge key="p" variant="green">+2.0</Badge>, t(ep.earning.postDesc)],
             [t(ep.earning.repost), <Badge key="r" variant="green">+1.5</Badge>, t(ep.earning.repostDesc)],
             [t(ep.earning.comment), <Badge key="c" variant="green">+1.0</Badge>, t(ep.earning.commentDesc)],
+            [t(ep.earning.comment) + " (" + t(ep.royalty.subReplyMyComment) + ")", <Badge key="sr" variant="green">+1.0</Badge>, t(ep.earning.commentDesc)],
             [t(ep.earning.reaction), <Badge key="l" variant="green">+0.05</Badge>, t(ep.earning.reactionDesc)],
           ]}
         />
@@ -250,6 +251,19 @@ function RoyaltyTab() {
         />
         <div className="mt-3 text-[11px] text-muted-foreground">
           {t(ep.royalty.dailyCap)}: <Badge variant="amber">40 MOM</Badge> · {t(ep.royalty.accountAge)}
+        </div>
+      </Card>
+      <Card>
+        <h3 className="text-[14px] font-bold text-foreground mb-1">{t(ep.royalty.commentRoyalty)}</h3>
+        <p className="text-[12px] text-muted-foreground mb-3">{t(ep.royalty.commentRoyaltyDesc)}</p>
+        <DataTable
+          headers={[t(ep.royalty.trigger), t(ep.royalty.reward), t(ep.royalty.condition)]}
+          rows={[
+            [t(ep.royalty.subReplyMyComment), <Badge key="7" variant="green">+0.1 MOM</Badge>, t(ep.royalty.notSelf)],
+          ]}
+        />
+        <div className="mt-3 text-[11px] text-muted-foreground">
+          {t(ep.royalty.accountAge)}
         </div>
       </Card>
     </div>
