@@ -635,7 +635,7 @@ export function RightSidebar() {
               {t(dictionary.sidebar.aboutMomment)}
             </Link>
             <a
-              href="https://xjbxslhbilveszgywurq.supabase.co/storage/v1/object/public/etc/momment_pitchdeck.pdf"
+              href="https://xjbxslhbilveszgywurq.supabase.co/storage/v1/object/public/etc/momment_pitchdeck1.pdf"
               download="momment_pitchdeck.pdf"
               className="hover:underline flex items-center gap-1"
             >

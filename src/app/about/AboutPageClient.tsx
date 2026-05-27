@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { RiArrowLeftLine, RiDownloadLine } from "react-icons/ri";
 
 const PDF_URL =
-  "https://xjbxslhbilveszgywurq.supabase.co/storage/v1/object/public/etc/momment_pitchdeck.pdf";
+  "https://xjbxslhbilveszgywurq.supabase.co/storage/v1/object/public/etc/momment_pitchdeck1.pdf";
 
 export function AboutPageClient() {
   const router = useRouter();
