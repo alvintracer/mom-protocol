@@ -114,7 +114,7 @@ export default function ExplorePage() {
 
       const clusterIds = clusterRows.map((cluster) => cluster.id);
       const eventIds = clusterRows.map((c) => c.canonical_event_id).filter(Boolean) as string[];
-      const [{ data: sourceRows }, { data: membershipRows }, { data: sponsorRows }, { data: assertionRows }, { data: rulesRows }, { data: translationRows }] = await Promise.all([
+      const [{ data: sourceRows }, { data: membershipRows }, { data: sponsorRows }, { data: assertionRows }, { data: rulesRows }, { data: translationRows }, { data: eventRows }] = await Promise.all([
         supabase
           .from("attention_sources")
           .select("*")
@@ -147,6 +147,12 @@ export default function ExplorePage() {
               .in("event_id", eventIds)
               .eq("status", "translated")
           : Promise.resolve({ data: [] as { event_id: string; language: string; title: string | null; description: string | null }[] }),
+        eventIds.length > 0
+          ? supabase
+              .from("events")
+              .select("id, ends_at")
+              .in("id", eventIds)
+          : Promise.resolve({ data: [] as { id: string; ends_at: string | null }[] }),
       ]);
 
       const sponsorMap = new Map<string, { name: string; logoUrl?: string | null; tagline?: string | null; url: string; color?: string | null }>();
@@ -214,9 +220,18 @@ export default function ExplorePage() {
         }
       }
 
+      // Build event_id -> ends_at map
+      const eventEndsAtMap = new Map<string, string | null>();
+      if (eventRows) {
+        for (const ev of eventRows as { id: string; ends_at: string | null }[]) {
+          eventEndsAtMap.set(ev.id, ev.ends_at);
+        }
+      }
+
       setAttentions(
         clusterRows.map((cluster) => {
           const tx = cluster.canonical_event_id ? txMap.get(cluster.canonical_event_id) : undefined;
+          const eventEndsAt = cluster.canonical_event_id ? eventEndsAtMap.get(cluster.canonical_event_id) ?? null : null;
           return mapClusterToExploreAttention(
             cluster,
             (sourceRows ?? []).filter((source) => source.cluster_id === cluster.id),
@@ -230,6 +245,7 @@ export default function ExplorePage() {
             resolvedMap.get(cluster.id) ?? null,
             cluster.canonical_event_id ? outcomesMap.get(cluster.canonical_event_id) ?? [] : [],
             tx ?? null,
+            eventEndsAt,
           );
         }),
       );
@@ -936,6 +952,7 @@ function mapClusterToExploreAttention(
   resolvedOutcome?: string | null,
   outcomes?: string[],
   translations?: TranslationsEntry,
+  eventEndsAt?: string | null,
 ): ExploreAttention {
   const sourceNames = Array.from(
     new Set(sources.map((source) => source.source_platform).filter(Boolean)),
@@ -950,10 +967,12 @@ function mapClusterToExploreAttention(
             sourceSignals.length,
         )
       : Math.min(99, Math.max(1, Math.round(Number(cluster.attention_score))));
-  const closestEndAt = sources
+  // Use event.ends_at as primary deadline, fallback to closest source.ends_at
+  const sourceEndAt = sources
     .map((source) => source.ends_at)
     .filter((value): value is string => Boolean(value))
     .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0];
+  const closestEndAt = eventEndsAt || sourceEndAt || null;
 
   return {
     id: cluster.id,
