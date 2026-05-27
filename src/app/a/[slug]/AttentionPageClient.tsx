@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   RiAddLine,
   RiCameraLine,
@@ -12,6 +12,7 @@ import {
   RiMegaphoneLine,
   RiShieldCheckLine,
   RiShareForwardLine,
+  RiTimerLine,
   RiUser3Line,
 } from "react-icons/ri";
 
@@ -64,11 +65,19 @@ export function AttentionPageClient({ slug }: { slug: string }) {
   const [isTogglingJoin, setIsTogglingJoin] = useState(false);
   const [builder, setBuilder] = useState<ProfileRow | null>(null);
   const [latestAssertion, setLatestAssertion] = useState<AioAssertionRow | null>(null);
+  const [eventEndsAt, setEventEndsAt] = useState<string | null>(null);
   const [translatedTitle, setTranslatedTitle] = useState<string | null>(null);
   const [translatedDescription, setTranslatedDescription] = useState<string | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "missing">(
     "loading",
   );
+  const [now, setNow] = useState(() => Date.now());
+
+  // Tick every second for countdown timer
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const postIds = useMemo(() => posts.map((p) => p.id), [posts]);
   const { getPostBody } = useContentTranslations(postIds);
@@ -108,6 +117,7 @@ export function AttentionPageClient({ slug }: { slug: string }) {
         { data: ruleData },
         { count: membershipCount },
         { data: membershipData },
+        { data: eventData },
       ] = await Promise.all([
         supabase
           .from("attention_sources")
@@ -135,6 +145,13 @@ export function AttentionPageClient({ slug }: { slug: string }) {
               .eq("user_id", userData.user.id)
               .maybeSingle()
           : Promise.resolve({ data: null }),
+        clusterData.canonical_event_id
+          ? supabase
+              .from("events")
+              .select("ends_at")
+              .eq("id", clusterData.canonical_event_id)
+              .maybeSingle()
+          : Promise.resolve({ data: null as { ends_at: string | null } | null }),
       ]);
 
       if (!mounted) {
@@ -147,6 +164,7 @@ export function AttentionPageClient({ slug }: { slug: string }) {
       setPosts(postRows ?? []);
       setMemberCount(membershipCount ?? 0);
       setHasJoined(Boolean(membershipData));
+      setEventEndsAt(eventData?.ends_at ?? null);
 
       if (ruleData?.id) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -295,10 +313,24 @@ export function AttentionPageClient({ slug }: { slug: string }) {
   const outcomeOptions = normalizeOutcomeOptions(rule?.supported_outcomes, cluster.title);
   const createPostHref = `/posts/new?attention=${encodeURIComponent(cluster.id)}`;
   const aioDisplayStatus = getAioDisplayStatus(latestAssertion, rule);
-  const canSubmitAssertion =
+  const oracleConfig = (rule?.oracle_config ?? {}) as Record<string, unknown>;
+  const builderWindowSec = Number(oracleConfig.builder_verification_window_seconds ?? 43200);
+  const openWindowSec = Number(oracleConfig.open_verification_window_seconds ?? 43200);
+  const phase = getResolutionPhase(eventEndsAt, builderWindowSec, openWindowSec, now);
+  const isBuilder = Boolean(userId && cluster?.created_by === userId);
+
+  const assertionAvailable =
     !latestAssertion ||
     latestAssertion.status === "rejected" ||
     latestAssertion.status === "cancelled";
+
+  const canSubmitAssertion =
+    assertionAvailable &&
+    (
+      phase.phase === "no_deadline" ||
+      (phase.phase === "builder_window" && isBuilder) ||
+      phase.phase === "open_window"
+    );
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -614,6 +646,11 @@ export function AttentionPageClient({ slug }: { slug: string }) {
                   </p>
                 )}
               </section>
+              {/* Oracle Timer Card */}
+              {phase.phase !== "no_deadline" && (
+                <OracleTimerCard phase={phase} isBuilder={isBuilder} />
+              )}
+
               {canSubmitAssertion ? (
                 <AioAssertionForm
                   eventId={cluster.canonical_event_id || rule.event_id || cluster.id}
@@ -624,6 +661,24 @@ export function AttentionPageClient({ slug }: { slug: string }) {
                   bondAmount={rule.bond_amount}
                   isLoggedIn={Boolean(userId)}
                 />
+              ) : assertionAvailable ? (
+                /* Assertion slot is open but user can't submit due to phase/role */
+                <section className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+                  <h3 className="text-[14px] font-black text-foreground">
+                    {phase.phase === "pre_event"
+                      ? t(dictionary.aio.oracleTimer.preEvent)
+                      : phase.phase === "builder_window" && !isBuilder
+                        ? t(dictionary.aio.oracleTimer.builderOnly)
+                        : t(dictionary.aio.oracleTimer.windowClosed)}
+                  </h3>
+                  <p className="mt-1 text-[13px] font-semibold leading-5 text-muted-foreground">
+                    {phase.phase === "pre_event"
+                      ? t(dictionary.aio.oracleTimer.preEventDesc)
+                      : phase.phase === "builder_window" && !isBuilder
+                        ? t(dictionary.aio.oracleTimer.builderWindowDesc)
+                        : t(dictionary.aio.oracleTimer.windowClosedDesc)}
+                  </p>
+                </section>
               ) : (
                 <section className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4">
                   <h3 className="text-[14px] font-black text-foreground">
@@ -902,4 +957,168 @@ function computeOutcomeCounts(posts: PostRow[], outcomeOptions: string[]) {
     outcome: option,
     count: counts.get(option.toLowerCase()) ?? 0,
   }));
+}
+
+// ─── Oracle Resolution Phase ────────────────────────
+
+type ResolutionPhase =
+  | { phase: "no_deadline" }
+  | { phase: "pre_event"; remainingMs: number }
+  | { phase: "builder_window"; remainingMs: number; progressPct: number }
+  | { phase: "open_window"; remainingMs: number; progressPct: number }
+  | { phase: "window_closed" };
+
+function getResolutionPhase(
+  endsAt: string | null,
+  builderWindowSec: number,
+  openWindowSec: number,
+  nowMs: number,
+): ResolutionPhase {
+  if (!endsAt) return { phase: "no_deadline" };
+
+  const endMs = new Date(endsAt).getTime();
+  if (Number.isNaN(endMs)) return { phase: "no_deadline" };
+
+  const builderWindowMs = builderWindowSec * 1000;
+  const openWindowMs = openWindowSec * 1000;
+
+  const builderStart = endMs;
+  const builderEnd = endMs + builderWindowMs;
+  const openEnd = builderEnd + openWindowMs;
+
+  if (nowMs < builderStart) {
+    return { phase: "pre_event", remainingMs: builderStart - nowMs };
+  }
+
+  if (nowMs < builderEnd) {
+    const elapsed = nowMs - builderStart;
+    return {
+      phase: "builder_window",
+      remainingMs: builderEnd - nowMs,
+      progressPct: Math.min(100, (elapsed / builderWindowMs) * 100),
+    };
+  }
+
+  if (nowMs < openEnd) {
+    const elapsed = nowMs - builderEnd;
+    return {
+      phase: "open_window",
+      remainingMs: openEnd - nowMs,
+      progressPct: Math.min(100, (elapsed / openWindowMs) * 100),
+    };
+  }
+
+  return { phase: "window_closed" };
+}
+
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return "00:00:00";
+  const totalSec = Math.floor(ms / 1000);
+  const days = Math.floor(totalSec / 86400);
+  const hours = Math.floor((totalSec % 86400) / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  if (days > 0) {
+    return `${days}d ${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+  }
+  return `${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+}
+
+function OracleTimerCard({
+  phase,
+  isBuilder,
+}: {
+  phase: ResolutionPhase;
+  isBuilder: boolean;
+}) {
+  const { dictionary, t } = useI18n();
+  const ot = dictionary.aio.oracleTimer;
+
+  if (phase.phase === "no_deadline") return null;
+
+  if (phase.phase === "pre_event") {
+    return (
+      <section className="rounded-2xl border border-zinc-300/50 bg-zinc-50/50 p-4 dark:border-zinc-700/50 dark:bg-zinc-900/30">
+        <div className="flex items-center gap-2">
+          <RiTimerLine className="size-4 text-zinc-400" />
+          <h3 className="text-[13px] font-black text-muted-foreground">{t(ot.preEvent)}</h3>
+        </div>
+        <p className="mt-1 text-[12px] font-medium text-muted-foreground">{t(ot.preEventDesc)}</p>
+        <div className="mt-3 flex items-center gap-2">
+          <span className="text-[11px] font-black text-muted-foreground">{t(ot.opensIn)}</span>
+          <span className="rounded-lg bg-zinc-200/60 px-2.5 py-1 font-mono text-[13px] font-black tabular-nums text-foreground dark:bg-zinc-800">
+            {formatCountdown(phase.remainingMs)}
+          </span>
+        </div>
+      </section>
+    );
+  }
+
+  if (phase.phase === "builder_window") {
+    return (
+      <section className="rounded-2xl border border-amber-400/30 bg-amber-500/5 p-4">
+        <div className="flex items-center gap-2">
+          <RiTimerLine className="size-4 text-amber-500" />
+          <h3 className="text-[13px] font-black text-amber-700 dark:text-amber-400">{t(ot.builderWindow)}</h3>
+        </div>
+        <p className="mt-1 text-[12px] font-medium text-muted-foreground">
+          {isBuilder ? t(ot.builderWindowDesc) : t(ot.builderOnly)}
+        </p>
+        <div className="mt-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black text-muted-foreground">{t(ot.remaining)}</span>
+            <span className="rounded-lg bg-amber-100/60 px-2.5 py-1 font-mono text-[13px] font-black tabular-nums text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+              {formatCountdown(phase.remainingMs)}
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-amber-200/40 dark:bg-amber-500/10">
+            <div
+              className="h-full rounded-full bg-amber-500 transition-all"
+              style={{ width: `${phase.progressPct}%` }}
+            />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (phase.phase === "open_window") {
+    return (
+      <section className="rounded-2xl border border-blue-400/30 bg-blue-500/5 p-4">
+        <div className="flex items-center gap-2">
+          <RiTimerLine className="size-4 text-blue-500" />
+          <h3 className="text-[13px] font-black text-blue-700 dark:text-blue-400">{t(ot.openWindow)}</h3>
+        </div>
+        <p className="mt-1 text-[12px] font-medium text-muted-foreground">{t(ot.openWindowDesc)}</p>
+        <div className="mt-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black text-muted-foreground">{t(ot.remaining)}</span>
+            <span className="rounded-lg bg-blue-100/60 px-2.5 py-1 font-mono text-[13px] font-black tabular-nums text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
+              {formatCountdown(phase.remainingMs)}
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-blue-200/40 dark:bg-blue-500/10">
+            <div
+              className="h-full rounded-full bg-blue-500 transition-all"
+              style={{ width: `${phase.progressPct}%` }}
+            />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // window_closed
+  return (
+    <section className="rounded-2xl border border-zinc-300/50 bg-zinc-50/50 p-4 dark:border-zinc-700/50 dark:bg-zinc-900/30">
+      <div className="flex items-center gap-2">
+        <RiTimerLine className="size-4 text-zinc-400" />
+        <h3 className="text-[13px] font-black text-muted-foreground">{t(ot.windowClosed)}</h3>
+      </div>
+      <p className="mt-1 text-[12px] font-medium text-muted-foreground">{t(ot.windowClosedDesc)}</p>
+    </section>
+  );
 }

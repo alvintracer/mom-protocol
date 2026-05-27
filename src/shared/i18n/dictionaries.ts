@@ -531,6 +531,48 @@ export const dictionary = {
         "Aún no hay envíos. Recopila evidencia y envía tu resultado.",
       ),
     },
+    oracleTimer: {
+      preEvent: text(
+        "아직 검증 기간이 아닙니다",
+        "Verification period has not started",
+        "El período de verificación no ha comenzado",
+      ),
+      preEventDesc: text(
+        "이벤트 마감 후 검증 제출이 가능합니다.",
+        "Assertions can be submitted after the event deadline.",
+        "Las aserciones se pueden enviar después del plazo del evento.",
+      ),
+      opensIn: text("검증 시작까지", "Opens in", "Se abre en"),
+      builderWindow: text("빌더 검증 기간", "Builder Verification Window", "Ventana de verificación del builder"),
+      builderWindowDesc: text(
+        "어텐션 빌더가 먼저 검증을 제출할 수 있습니다.",
+        "The attention builder has priority to submit verification first.",
+        "El builder de atención tiene prioridad para enviar la verificación primero.",
+      ),
+      builderOnly: text(
+        "빌더가 먼저 검증할 수 있습니다. 오픈 검증까지 기다려주세요.",
+        "The builder has first right to verify. Please wait for the open window.",
+        "El builder tiene prioridad para verificar. Espere a la ventana abierta.",
+      ),
+      openWindow: text("오픈 검증 기간", "Open Verification Window", "Ventana de verificación abierta"),
+      openWindowDesc: text(
+        "누구나 검증을 제출할 수 있습니다.",
+        "Anyone can submit a verification.",
+        "Cualquiera puede enviar una verificación.",
+      ),
+      remaining: text("남은 시간", "Remaining", "Restante"),
+      windowClosed: text("검증 기간 종료", "Verification window closed", "Ventana de verificación cerrada"),
+      windowClosedDesc: text(
+        "검증 기간이 종료되었습니다.",
+        "The verification window has closed.",
+        "La ventana de verificación se ha cerrado.",
+      ),
+      noDeadline: text(
+        "마감일 미설정 — 언제든 검증 가능",
+        "No deadline set — verify anytime",
+        "Sin plazo — verificar en cualquier momento",
+      ),
+    },
     evidence: {
       title: text("Evidence Lite", "Evidence Lite", "Evidence Lite"),
       captured: text("캡처 완료", "Captured", "Capturado"),
