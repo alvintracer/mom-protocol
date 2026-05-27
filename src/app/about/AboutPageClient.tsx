@@ -1,49 +1,43 @@
 "use client";
 
-import { useI18n } from "@/shared/i18n/LanguageProvider";
-import { RiDownloadLine, RiArrowLeftLine } from "react-icons/ri";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { RiArrowLeftLine, RiDownloadLine } from "react-icons/ri";
 
 const PDF_URL =
   "https://xjbxslhbilveszgywurq.supabase.co/storage/v1/object/public/etc/momment_pitchdeck.pdf";
 
 export function AboutPageClient() {
-  const { dictionary, t } = useI18n();
+  const router = useRouter();
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col" style={{ height: "calc(100vh - 56px)" }}>
-      {/* ── Header Bar ── */}
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-background/80 backdrop-blur-xl px-4 py-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <Link
-            href="/"
-            className="flex size-8 items-center justify-center rounded-full transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          >
-            <RiArrowLeftLine className="size-4 text-foreground" />
-          </Link>
-          <div>
-            <h1 className="text-lg font-black text-foreground">
-              {t(dictionary.sidebar.aboutMomment ?? { ko: "About momment.", en: "About momment.", es: "About momment." })}
-            </h1>
-            <p className="text-[12px] font-medium text-muted-foreground">Pitch Deck</p>
-          </div>
-        </div>
+    <div className="relative h-screen w-screen overflow-hidden bg-black">
+      {/* ── Floating controls ── */}
+      <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
+        <button
+          onClick={() => router.back()}
+          className="flex size-10 items-center justify-center rounded-full bg-zinc-900/80 border border-zinc-700/50 backdrop-blur-md text-white transition-all hover:bg-zinc-800 hover:scale-105 active:scale-95"
+          aria-label="Go back"
+        >
+          <RiArrowLeftLine className="size-5" />
+        </button>
+      </div>
+
+      <div className="absolute top-4 right-4 z-20">
         <a
           href={PDF_URL}
           download="momment_pitchdeck.pdf"
-          className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-[13px] font-bold text-white transition-all hover:bg-blue-700 active:scale-95"
+          className="flex items-center gap-2 rounded-full bg-zinc-900/80 border border-zinc-700/50 backdrop-blur-md px-4 py-2.5 text-[13px] font-semibold text-white transition-all hover:bg-zinc-800 hover:scale-105 active:scale-95"
         >
           <RiDownloadLine className="size-4" />
-          {t(dictionary.sidebar.downloadPdf ?? { ko: "PDF 다운로드", en: "Download PDF", es: "Descargar PDF" })}
+          PDF
         </a>
       </div>
 
-      {/* ── Embedded Pitch Deck ── */}
+      {/* ── Pitch Deck ── */}
       <iframe
         src="/pitchdeck.html"
-        className="flex-1 w-full border-0 bg-black"
+        className="h-full w-full border-0"
         title="momment. Pitch Deck"
-        style={{ minHeight: 0 }}
       />
     </div>
   );

@@ -10,10 +10,10 @@ import { TopBar } from "@/shared/components/layout/TopBar";
 import { GlobalAdScripts } from "@/shared/components/ads/NetworkAds";
 
 /** Pages that should use full-width center column (no max-w constraint) */
-const FULL_WIDTH_PATHS = ["/explore", "/search", "/markets", "/about"];
+const FULL_WIDTH_PATHS = ["/explore", "/search", "/markets"];
 
 /** Pages that bypass AppShell entirely (they provide their own shell) */
-const BYPASS_SHELL_PATHS = ["/terminal"];
+const BYPASS_SHELL_PATHS = ["/terminal", "/about"];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
