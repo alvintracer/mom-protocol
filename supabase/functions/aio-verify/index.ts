@@ -629,6 +629,8 @@ function aggregateResults(
       result.verdict === "insufficient_evidence" || result.verdict === "invalid_evidence",
   );
   const ambiguous = usable.filter((result) => result.verdict === "ambiguous");
+  // Combined "negative" = anything that is NOT supports (refutes + insufficient + invalid)
+  const negative = usable.filter((result) => result.verdict !== "supports" && result.verdict !== "ambiguous");
   const supportConfidence = average(supporting.map((result) => result.confidence));
   const providerSummary = results.map((result) => ({
     provider: result.provider,
@@ -649,6 +651,7 @@ function aggregateResults(
     providers: providerSummary,
   };
 
+  // If 2+ providers failed entirely, retry is required
   if (failed.length >= 2) {
     return {
       verdict: "insufficient_evidence",
@@ -658,6 +661,18 @@ function aggregateResults(
     };
   }
 
+  // If 1+ provider failed AND no usable provider supports → reject
+  // (failed provider should never help push toward finalization)
+  if (failed.length >= 1 && supporting.length === 0) {
+    return {
+      verdict: "insufficient_evidence",
+      confidence: 0,
+      status: "rejected",
+      metadata: { ...baseMetadata, decision: "rejected_provider_error_no_support" },
+    };
+  }
+
+  // Strong support: 2+ support with high confidence
   if (supporting.length >= 2 && supportConfidence >= confidenceThreshold) {
     return {
       verdict: "supports",
@@ -667,6 +682,7 @@ function aggregateResults(
     };
   }
 
+  // Strong refutation: 2+ refutes
   if (refuting.length >= 2) {
     return {
       verdict: "refutes",
@@ -676,6 +692,7 @@ function aggregateResults(
     };
   }
 
+  // Strong insufficient: 2+ insufficient/invalid
   if (insufficient.length >= 2) {
     return {
       verdict: "insufficient_evidence",
@@ -685,20 +702,33 @@ function aggregateResults(
     };
   }
 
+  // Mixed negative: refutes + insufficient combined >= 2 → reject
+  // (e.g. 1 refutes + 1 insufficient = no support for the claim)
+  if (negative.length >= 2 && supporting.length === 0) {
+    return {
+      verdict: "refutes",
+      confidence: average(negative.map((result) => result.confidence)),
+      status: "rejected",
+      metadata: { ...baseMetadata, decision: "rejected_by_mixed_negative" },
+    };
+  }
+
+  // Ambiguous consensus
   if (ambiguous.length >= 2) {
     return {
       verdict: "ambiguous",
       confidence: average(ambiguous.map((result) => result.confidence)),
-      status: "llm_verified",
-      metadata: { ...baseMetadata, decision: "manual_review_ambiguous" },
+      status: "rejected",
+      metadata: { ...baseMetadata, decision: "rejected_ambiguous" },
     };
   }
 
+  // No consensus at all → reject (do NOT allow finalization without clear support)
   return {
     verdict: "ambiguous",
     confidence: average(usable.map((result) => result.confidence)),
-    status: "llm_verified",
-    metadata: { ...baseMetadata, decision: "manual_review_no_consensus" },
+    status: "rejected",
+    metadata: { ...baseMetadata, decision: "rejected_no_consensus" },
   };
 }
 

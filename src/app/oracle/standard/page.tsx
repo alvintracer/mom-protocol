@@ -239,7 +239,8 @@ export default function OracleDashboardPage() {
   );
 
   const isFinalizable = (a: AssertionRow) =>
-    (a.status === "llm_verified" || a.status === "challenge_period") &&
+    a.status === "challenge_period" &&
+    a.aggregate_verdict === "supports" &&
     currentUserId != null &&
     a.proposer_id === currentUserId;
 
