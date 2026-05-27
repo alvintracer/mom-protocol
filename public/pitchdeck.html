@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>momment. — Pitch Deck</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050508;--bg2:#0a0a10;--bg3:#111118;--bg4:#1a1a24;
+  --white:#f0f0f5;--dim:#888899;--muted:#555566;
+  --blue:#3B82F6;--blue2:#2563EB;--blue-glow:rgba(59,130,246,.15);
+  --cyan:#06b6d4;--purple:#8b5cf6;--green:#22c55e;--red:#ef4444;
+  --font-display:'Outfit',sans-serif;
+  --font-mono:'JetBrains Mono','Space Mono',monospace;
+  --slide-w:1280px;--slide-h:720px;
+}
+html{font-size:16px;scroll-behavior:smooth}
+body{background:#000;font-family:var(--font-display);color:var(--white);-webkit-font-smoothing:antialiased}
+
+.deck{display:flex;flex-direction:column;align-items:center;gap:2px;padding:20px 0}
+.slide{
+  width:var(--slide-w);height:var(--slide-h);
+  background:var(--bg);position:relative;overflow:hidden;
+  display:flex;flex-direction:column;justify-content:center;
+  padding:60px 80px;flex-shrink:0;
+}
+.slide::before{
+  content:'';position:absolute;top:0;left:0;right:0;bottom:0;
+  background:radial-gradient(ellipse at 20% 0%,rgba(59,130,246,.06) 0%,transparent 60%),
+              radial-gradient(ellipse at 80% 100%,rgba(139,92,246,.04) 0%,transparent 60%);
+  pointer-events:none;z-index:0;
+}
+.slide>*{position:relative;z-index:1}
+
+.slide-number{position:absolute;bottom:24px;right:40px;font:500 11px var(--font-mono);color:var(--muted);letter-spacing:.1em}
+.brand-mark{position:absolute;bottom:24px;left:40px;font:700 12px var(--font-display);color:var(--muted);letter-spacing:-.02em}
+
+h1{font:800 52px/1.05 var(--font-display);letter-spacing:-.03em;margin-bottom:16px}
+h2{font:700 36px/1.15 var(--font-display);letter-spacing:-.025em;margin-bottom:12px}
+h3{font:600 22px/1.3 var(--font-display);letter-spacing:-.01em;margin-bottom:8px;color:var(--blue)}
+p,.desc{font:400 16px/1.6 var(--font-display);color:var(--dim)}
+.desc-lg{font:300 20px/1.5 var(--font-display);color:var(--dim)}
+.accent{color:var(--blue)}
+.accent-cyan{color:var(--cyan)}
+.accent-purple{color:var(--purple)}
+.accent-green{color:var(--green)}
+.bold{font-weight:700;color:var(--white)}
+.mono{font-family:var(--font-mono);font-size:13px;color:var(--cyan)}
+
+.tag{display:inline-block;padding:4px 12px;border:1px solid var(--muted);border-radius:20px;font:500 11px var(--font-mono);color:var(--dim);letter-spacing:.05em;text-transform:uppercase}
+.tag-blue{border-color:var(--blue);color:var(--blue);background:var(--blue-glow)}
+.tag-green{border-color:var(--green);color:var(--green)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:32px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px}
+.grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:20px}
+
+.card{background:var(--bg3);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:24px}
+.card h3{margin-bottom:6px}
+.card p{font-size:14px;line-height:1.5;color:var(--dim)}
+
+.divider{width:60px;height:2px;background:linear-gradient(90deg,var(--blue),var(--cyan));margin:16px 0;border-radius:2px}
+
+.geo-icon{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;vertical-align:middle;margin-right:6px;flex-shrink:0}
+.geo-icon svg{width:100%;height:100%}
+.geo-icon-lg{width:32px;height:32px}
+
+.mint-burn-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.mint-burn-grid table{font-size:13px;width:100%}
+.formula-box{text-align:center;padding:20px;margin-bottom:20px;background:var(--bg2);border:1px solid rgba(255,255,255,.06);border-radius:12px}
+
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:12px}
+th{text-align:left;padding:10px 14px;background:var(--bg3);color:var(--blue);font:600 12px var(--font-mono);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(255,255,255,.08)}
+td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--dim)}
+tr:hover td{color:var(--white)}
+
+.quote{border-left:3px solid var(--blue);padding:12px 20px;margin:16px 0;font:400 18px/1.5 var(--font-display);color:var(--white);background:var(--blue-glow);border-radius:0 8px 8px 0}
+
+.flow-step{display:flex;align-items:center;gap:12px;margin:6px 0}
+.flow-dot{width:28px;height:28px;border-radius:50%;background:var(--bg4);border:2px solid var(--blue);display:flex;align-items:center;justify-content:center;font:700 12px var(--font-mono);color:var(--blue);flex-shrink:0}
+.flow-line{width:1px;height:20px;background:rgba(59,130,246,.3);margin-left:13px}
+
+.screenshot{border-radius:8px;border:1px solid rgba(255,255,255,.08);max-height:100%;object-fit:contain;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+
+.cover-center{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;height:100%}
+
+.stats{display:flex;gap:40px;margin:20px 0}
+.stat-item .stat-value{font:800 40px var(--font-display);color:var(--blue);letter-spacing:-.02em}
+.stat-item .stat-label{font:500 13px var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+
+.timeline{display:flex;gap:0;margin:20px 0}
+.tl-item{flex:1;padding:20px;border-top:3px solid var(--bg4);position:relative}
+.tl-item.active{border-top-color:var(--blue)}
+.tl-item.active::before{content:'';width:10px;height:10px;border-radius:50%;background:var(--blue);position:absolute;top:-7px;left:20px;box-shadow:0 0 12px var(--blue)}
+.tl-item h3{font-size:16px;margin-bottom:6px}
+.tl-item p{font-size:13px;line-height:1.5}
+
+.logo-text{font:900 72px var(--font-display);letter-spacing:-.04em}
+.logo-dot{color:var(--blue)}
+
+@media print{
+  .deck{gap:0;padding:0}
+  .slide{page-break-after:always;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div class="deck">
+
+<!-- SLIDE 1: COVER -->
+<div class="slide">
+  <div class="cover-center">
+    <div style="margin-bottom:8px"><img src="/pitchdeck/icon-192.png" alt="momment." style="width:80px;height:80px;border-radius:16px"></div>
+    <div style="margin-bottom:16px"><img src="/pitchdeck/logo-light.svg" alt="momment." style="height:56px"></div>
+    <p style="font:500 22px var(--font-display);color:var(--dim);letter-spacing:.02em">Social Prediction Platform powered by Agentic Oracle</p>
+    <div class="divider" style="margin:24px auto"></div>
+    <p style="font:400 16px/1.6 var(--font-display);color:var(--muted);max-width:600px">Read by AI. Verified by Humans. Sealed on Chain.</p>
+    <div style="height:24px"></div>
+    <a href="https://momment.mom" target="_blank" style="font:500 15px var(--font-mono);color:var(--blue);text-decoration:none;padding:8px 20px;border:1px solid var(--blue);border-radius:24px;transition:all .2s">momment.mom</a>
+    <div style="height:24px"></div>
+    <div style="display:flex;gap:16px">
+      <span class="tag">Traverse Team</span>
+      <span class="tag">2026</span>
+      <span class="tag tag-blue">GASOK Accelerating</span>
+    </div>
+  </div>
+  <span class="slide-number">01 / 14</span>
+</div>
+
+<!-- SLIDE 2: VISION -->
+<div class="slide">
+  <div class="cover-center" style="text-align:center">
+    <p style="font:300 18px var(--font-display);color:var(--muted);margin-bottom:32px;letter-spacing:.08em;text-transform:uppercase">Vision</p>
+    <h1 style="font-size:46px;max-width:800px;line-height:1.15">In <span class="accent">momment.</span>, you don't bet on events.<br>You bet on <span style="text-decoration:underline;text-underline-offset:6px;text-decoration-color:var(--blue)">people</span>.</h1>
+    <div style="height:32px"></div>
+    <p style="font:300 19px/1.7 var(--font-display);color:var(--dim);max-width:640px">In Korea, where community is everything — predict what captures attention, build content that drives it, and turn that into <span class="bold">economic reward</span>.</p>
+    <div style="height:40px"></div>
+    <p style="font:600 24px var(--font-display);color:var(--white)">That's <span class="accent">momment.</span></p>
+  </div>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">02 / 14</span>
+</div>
+
+<!-- SLIDE 3: PROBLEM -->
+<div class="slide">
+  <span class="tag" style="margin-bottom:20px">Problem</span>
+  <h2>Prediction markets are exploding globally.<br>But <span class="accent">Korea has no path in.</span></h2>
+  <div style="height:16px"></div>
+  <div class="grid3">
+    <div class="card">
+      <h3>$1T Market by 2030</h3>
+      <p>Polymarket hit $22B in 2025. Kalshi earned $263M in fees. ICE invested $2B. Yet in Korea, prediction markets are illegal under gambling law.</p>
+    </div>
+    <div class="card">
+      <h3>Korean Events, No Oracle</h3>
+      <p>K-pop, KBO, elections, Samsung earnings are already traded on Polymarket — but UMA voters can't read Korean. Chainlink can't handle judgment data.</p>
+    </div>
+    <div class="card">
+      <h3>The Core Dilemma</h3>
+      <p>Give money → it's gambling → illegal. Give nothing → users don't come. How do you incentivize participation legally?</p>
+    </div>
+  </div>
+  <div style="height:20px"></div>
+  <div class="quote">Prediction markets have massive power — but in Korea, the path must avoid speculation entirely. <span class="bold">momment. solved this.</span></div>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">03 / 14</span>
+</div>
+
+<!-- SLIDE 4: SOLUTION -->
+<div class="slide">
+  <span class="tag tag-blue" style="margin-bottom:20px">Solution</span>
+  <h2>momment<span class="logo-dot">.</span> = Prediction + Social + AI Oracle</h2>
+  <div style="height:4px"></div>
+  <div class="quote" style="font-size:16px">Users are rewarded not for "guessing the future" (= gambling), but for "accurately reporting facts that already happened" (= service contribution).</div>
+  <div style="height:16px"></div>
+  <div class="grid3">
+    <div class="card" style="border-top:3px solid var(--blue)">
+      <h3>Social-Fi Layer</h3>
+      <p>Attention-cluster communities. Posts, debates, follows, feeds. Creators build audiences around prediction topics.</p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--cyan)">
+      <h3 class="accent-cyan">AI Oracle (AIO)</h3>
+      <p>Multi-LLM verification. Evidence-based fact confirmation. Gemini + GPT + Grok adaptive consensus.</p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--purple)">
+      <h3 class="accent-purple">Reward Economy</h3>
+      <p>MOM Energy rewards. Vault revenue sharing. Ad/sponsor revenue flows back to contributors by Contribution Ratio.</p>
+    </div>
+  </div>
+  <div style="height:16px"></div>
+  <p style="font:500 14px var(--font-display);color:var(--muted)"><span class="tag-green tag" style="margin-right:8px">Legal</span> momment. is an Event Attention SocialFi platform — not a prediction market. No real-money betting. AIO bonds are honesty deposits, not wagers.</p>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">04 / 14</span>
+</div>
+
+<!-- SLIDE 5: PRODUCT -->
+<div class="slide" style="padding:40px 60px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+    <div>
+      <span class="tag tag-blue" style="margin-bottom:12px;display:inline-block">Product</span>
+      <h2 style="font-size:30px">Already built. Already running.</h2>
+    </div>
+    <span class="tag tag-green">30+ Pages Shipped</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1;min-height:0">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <img src="/pitchdeck/predictpage.png" class="screenshot" style="flex:1;max-height:260px;width:100%;object-fit:cover;object-position:top">
+      <p style="font:500 12px var(--font-mono);color:var(--muted);text-align:center">HOME — Prediction Feed + Global Markets</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <img src="/pitchdeck/hometab.png" class="screenshot" style="flex:1;max-height:260px;width:100%;object-fit:cover;object-position:top">
+      <p style="font:500 12px var(--font-mono);color:var(--muted);text-align:center">FEED — Community Posts + Energy Rankings</p>
+    </div>
+  </div>
+  <div style="display:flex;gap:20px;margin-top:12px;flex-wrap:wrap">
+    <span class="tag">Social Feed</span><span class="tag">Attention Builder</span><span class="tag">Polymarket Import</span><span class="tag">Manifold Import</span><span class="tag">Kalshi Import</span><span class="tag">AI Oracle</span><span class="tag">Vault</span><span class="tag">Referrals</span>
+  </div>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">05 / 14</span>
+</div>
+
+<!-- SLIDE 6: AIO -->
+<div class="slide" style="padding:40px 60px">
+  <div style="display:flex;gap:40px;align-items:flex-start">
+    <div style="flex:1">
+      <span class="tag" style="margin-bottom:16px;display:inline-block">AI Oracle</span>
+      <h2 style="font-size:28px">Agentic-Interoperable Oracle</h2>
+      <p style="margin-bottom:16px">Users submit claims with evidence (news articles). Multiple LLMs independently verify if the evidence supports the claim.</p>
+      <div class="flow-step"><div class="flow-dot">1</div><p style="font-size:14px"><span class="bold">Event closes</span> — deadline reached</p></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">2</div><p style="font-size:14px"><span class="bold">Builder window</span> — 12h for creator to submit</p></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">3</div><p style="font-size:14px"><span class="bold">Open window</span> — 12h for anyone to submit</p></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot">4</div><p style="font-size:14px"><span class="bold">Claim + Evidence + Bond (5 MOM)</span></p></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot" style="border-color:var(--cyan);color:var(--cyan)">AI</div><p style="font-size:14px"><span class="bold accent-cyan">Adaptive 2+1:</span> Gemini + GPT → agree? Done. Disagree? → Grok tiebreak</p></div>
+      <div class="flow-line"></div>
+      <div class="flow-step"><div class="flow-dot" style="border-color:var(--green);color:var(--green)">✓</div><p style="font-size:14px"><span class="bold accent-green">Finalized</span> — Result sealed on-chain</p></div>
+      <div style="height:12px"></div>
+      <p style="font:500 13px var(--font-mono);color:var(--muted)">Cost: ~$0.016/verification · $2,600/yr at 100K events</p>
+    </div>
+    <div style="width:340px;flex-shrink:0;align-self:stretch;display:flex;flex-direction:column">
+      <img src="/pitchdeck/oraclepage.png" class="screenshot" style="flex:1;width:100%;border-radius:8px;object-fit:cover;object-position:top">
+      <p style="font:500 11px var(--font-mono);color:var(--muted);text-align:center;margin-top:8px">ORACLE TERMINAL — Live AIO Pipeline</p>
+    </div>
+  </div>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">06 / 14</span>
+</div>
+
+<!-- SLIDE 7: LLM VERIFICATION -->
+<div class="slide">
+  <span class="tag" style="margin-bottom:16px">AIO Deep Dive</span>
+  <h2 style="font-size:28px">What the LLMs Actually Verify</h2>
+  <div style="height:8px"></div>
+  <div class="grid2">
+    <div>
+      <table>
+        <tr><th>Check</th><th>Question</th></tr>
+        <tr><td style="color:var(--blue);font-weight:600">RELEVANCE</td><td>Is this article related to the claim?</td></tr>
+        <tr><td style="color:var(--cyan);font-weight:600">SUPPORT</td><td>Does the article actually support the claim?</td></tr>
+        <tr><td style="color:var(--purple);font-weight:600">RECENCY</td><td>Is the article recent enough to be valid?</td></tr>
+        <tr><td style="color:var(--green);font-weight:600">CONSISTENCY</td><td>Do multiple sources agree?</td></tr>
+        <tr><td style="color:var(--white);font-weight:600">STATEMENT</td><td>Structured verdict: YES / NO / AMBIGUOUS</td></tr>
+      </table>
+      <div style="height:20px"></div>
+      <h3>Evidence Lite — No Copyright Risk</h3>
+      <p>Full article text is never stored. Only metadata + content hash + screenshot thumbnail. Proves "this content existed at this URL at this time" without reproducing copyrighted material.</p>
+    </div>
+    <div>
+      <h3>Full LLM Provenance</h3>
+      <p style="margin-bottom:12px">Every verification is fully transparent and auditable — unlike UMA's blackbox bot.</p>
+      <div class="card" style="background:var(--bg2);font-family:var(--font-mono);font-size:12px;line-height:1.8;color:var(--cyan)">
+        <span style="color:var(--muted)">// On-chain record for every verification</span><br>
+        model_id: <span style="color:var(--green)">"gemini-2.5-flash"</span><br>
+        prompt_version: <span style="color:var(--green)">"verifier-v1.2.0"</span><br>
+        prompt_hash: <span style="color:var(--purple)">sha256:abc123...</span><br>
+        input_hash: <span style="color:var(--purple)">sha256:def456...</span><br>
+        output_hash: <span style="color:var(--purple)">sha256:789abc...</span><br>
+        confidence: <span style="color:var(--blue)">95</span><br>
+        verdict: <span style="color:var(--green)">"YES"</span><br>
+        full_trace: <span style="color:var(--muted)">ipfs://Qm...</span>
+      </div>
+      <p style="font-size:13px;margin-top:8px;color:var(--muted)">100% reproducible. Same input → same model → same output. Full post-hoc audit possible.</p>
+    </div>
+  </div>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">07 / 14</span>
+</div>
+
+<!-- SLIDE 8: MOM ENERGY -->
+<div class="slide" style="padding:40px 60px">
+  <div style="display:flex;gap:12px;margin-bottom:16px;align-items:flex-start">
+    <img src="/pitchdeck/vaultpage1.png" class="screenshot" style="height:160px;border-radius:8px;object-fit:contain">
+    <img src="/pitchdeck/vaultpage2.png" class="screenshot" style="height:160px;border-radius:8px;object-fit:contain">
+    <div style="flex:1;padding-left:16px">
+      <span class="tag tag-blue" style="margin-bottom:10px;display:inline-block">Token Economy</span>
+      <h2 style="font-size:26px">MOM Energy</h2>
+      <p style="margin-bottom:0;font-size:14px">Participate more → earn more MOM → MOM value rises as supply burns.</p>
+    </div>
+  </div>
+  <div class="formula-box">
+    <span style="font:700 22px var(--font-mono);color:var(--blue);letter-spacing:.02em">$/MOM = Vault USD ÷ Total MOM Supply</span>
+  </div>
+  <div class="mint-burn-grid">
+    <div>
+      <h3 style="color:var(--green);font-size:16px;margin-bottom:8px"><span class="geo-icon" style="vertical-align:middle"><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><polygon points="12,2 22,22 2,22" stroke-linejoin="round"/></svg></span> MINT — Earn by Contributing</h3>
+      <table style="font-size:13px">
+        <tr><th>Action</th><th>Reward</th></tr>
+        <tr><td>Write post</td><td style="color:var(--green)">+2.0 MOM</td></tr>
+        <tr><td>Repost / Quote</td><td style="color:var(--green)">+1.5 MOM</td></tr>
+        <tr><td>Comment</td><td style="color:var(--green)">+1.0 MOM</td></tr>
+        <tr><td>Oracle submit (success)</td><td style="color:var(--green)">+5 MOM refund + α</td></tr>
+        <tr><td>Reaction</td><td style="color:var(--green)">+0.05 MOM</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3 style="color:var(--red);font-size:16px;margin-bottom:8px"><span class="geo-icon" style="vertical-align:middle"><svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><polygon points="12,22 22,2 2,2" stroke-linejoin="round"/></svg></span> BURN — Deflationary Mechanics</h3>
+      <table style="font-size:13px">
+        <tr><th>Action</th><th>Burn Rate</th></tr>
+        <tr><td>Ad bidding</td><td style="color:var(--red)">100% burned</td></tr>
+        <tr><td>Sponsorship</td><td style="color:var(--red)">50% burned</td></tr>
+        <tr><td>Premium post</td><td style="color:var(--red)">15% burned</td></tr>
+        <tr><td>Withdrawal fee</td><td style="color:var(--red)">5% burned</td></tr>
+      </table>
+    </div>
+  </div>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">08 / 14</span>
+</div>
+
+<!-- SLIDE 9: REVENUE -->
+<div class="slide">
+  <span class="tag" style="margin-bottom:16px">Revenue Model</span>
+  <h2 style="font-size:28px">Platform Revenue → Vault → User Rewards</h2>
+  <p style="margin-bottom:16px">All revenue flows into the Vault. 90% distributed to users by Contribution Ratio. 10% operations.</p>
+  <div class="grid2">
+    <div>
+      <h3>Revenue Streams (All Implemented <span class="geo-icon" style="vertical-align:middle;width:18px;height:18px"><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="4,12 10,18 20,6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>)</h3>
+      <table style="font-size:13px">
+        <tr><th>Stream</th><th>Mechanism</th><th>Burn</th></tr>
+        <tr><td style="color:var(--white);font-weight:500">Ad Slots</td><td>Native feed ads + AdSense</td><td style="color:var(--red)">100%</td></tr>
+        <tr><td style="color:var(--white);font-weight:500">Sponsorships</td><td>Attention cluster sponsor banners</td><td style="color:var(--red)">50%</td></tr>
+        <tr><td style="color:var(--white);font-weight:500">Premium Posts</td><td>Creator-set price, pay to read</td><td style="color:var(--red)">15%</td></tr>
+        <tr><td style="color:var(--white);font-weight:500">MOM Purchase</td><td>Direct MOM Energy purchase</td><td>→ Vault</td></tr>
+        <tr><td style="color:var(--white);font-weight:500">Campaigns</td><td>Brand-sponsored event missions</td><td>Split</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>Contribution Ranking</h3>
+      <div class="card" style="background:var(--bg2);margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font:700 14px var(--font-display)"><span class="geo-icon" style="width:18px;height:18px"><svg viewBox="0 0 24 24" fill="none"><polygon points="12,2 15,9 22,9 16,14 18,22 12,17 6,22 8,14 2,9 9,9" fill="rgba(250,204,21,.25)" stroke="#facc15" stroke-width="1.5" stroke-linejoin="round"/></svg></span> Gold — Top 5%</span>
+          <span class="mono" style="color:var(--green)">Highest share</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font:700 14px var(--font-display)"><span class="geo-icon" style="width:18px;height:18px"><svg viewBox="0 0 24 24" fill="none"><polygon points="12,2 15,9 22,9 16,14 18,22 12,17 6,22 8,14 2,9 9,9" fill="rgba(148,163,184,.2)" stroke="#94a3b8" stroke-width="1.5" stroke-linejoin="round"/></svg></span> Silver — Top 20%</span>
+          <span class="mono">Mid share</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font:700 14px var(--font-display)"><span class="geo-icon" style="width:18px;height:18px"><svg viewBox="0 0 24 24" fill="none" stroke="#555566" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4,20 C4,16 8,14 12,14 C16,14 20,16 20,20" stroke-linecap="round"/></svg></span> Member — Rest</span>
+          <span class="mono">Base share</span>
+        </div>
+      </div>
+      <h3>Vault Milestones</h3>
+      <p style="font-size:13px">Withdrawal limits unlock progressively as the Vault grows: Locked → Seed ($10K) → Early ($50K) → Growth ($100K) → Scale ($500K) → Mature ($1M) → Open ($7.5M)</p>
+    </div>
+  </div>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">09 / 14</span>
+</div>
+
+<!-- SLIDE 10: GLOBAL MARKETS -->
+<div class="slide">
+  <span class="tag" style="margin-bottom:16px">Global Integration</span>
+  <h2 style="font-size:28px">Polymarket · Manifold · Kalshi — <span class="accent">One-Click Import</span></h2>
+  <div style="height:8px"></div>
+  <div class="grid2">
+    <div>
+      <h3>What's Built</h3>
+      <div class="card" style="margin-bottom:12px"><p style="color:var(--white);font-weight:500"><span class="geo-icon" style="width:18px;height:18px"><svg viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><circle cx="10" cy="10" r="7"/><line x1="15" y1="15" x2="21" y2="21" stroke-linecap="round"/></svg></span> Global Market Explorer</p><p>Browse Polymarket, Manifold, Kalshi markets in real-time from /explore</p></div>
+      <div class="card" style="margin-bottom:12px"><p style="color:var(--white);font-weight:500"><span class="geo-icon" style="width:18px;height:18px"><svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><polygon points="12,2 2,22 22,22" stroke-linejoin="round"/><line x1="12" y1="10" x2="12" y2="16" stroke-linecap="round"/></svg></span> One-Click Attention</p><p>Import any external market as a momment. attention cluster instantly</p></div>
+      <div class="card" style="margin-bottom:12px"><p style="color:var(--white);font-weight:500"><span class="geo-icon" style="width:18px;height:18px"><svg viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="2" y1="12" x2="22" y2="12"/><ellipse cx="12" cy="12" rx="5" ry="9"/></svg></span> Real-Time Translation</p><p>English markets auto-translated to Korean for local community</p></div>
+      <div class="card"><p style="color:var(--white);font-weight:500"><span class="geo-icon" style="width:18px;height:18px"><svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="7,17 12,8 17,13" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Market Details</p><p>Volume, deadline, options — all displayed without trade execution</p></div>
+    </div>
+    <div>
+      <h3>Why This Matters</h3>
+      <div class="quote" style="font-size:15px">Korean events are traded on Polymarket — but there's no trusted oracle to verify them. momment. becomes that verification infrastructure through social discussion + AI oracle.</div>
+      <div style="height:16px"></div>
+      <h3>Legal Boundary</h3>
+      <p style="font-size:14px">momment. never provides buy/sell buttons, order routing, or fund custody for external markets. Users discover events and discuss — actual trading is their independent decision on external platforms.</p>
+      <div style="height:12px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span class="tag tag-green">No order routing</span>
+        <span class="tag tag-green">No fund custody</span>
+        <span class="tag tag-green">No trade execution</span>
+      </div>
+    </div>
+  </div>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">10 / 14</span>
+</div>
+
+<!-- SLIDE 11: K-DATA -->
+<div class="slide">
+  <span class="tag" style="margin-bottom:16px">Blue Ocean</span>
+  <h2 style="font-size:28px">Korean Oracle Data = <span class="accent">Global Blue Ocean</span></h2>
+  <p style="margin-bottom:16px">Data that only Korea can produce accurately. UMA voters structurally cannot handle this.</p>
+  <table>
+    <tr><th>Category</th><th>Key Data</th><th>Global Demand</th></tr>
+    <tr><td style="color:var(--blue);font-weight:600">K-Culture</td><td>Melon/Genie charts, K-pop comebacks, drama ratings, awards</td><td>Polymarket, Opinion, Myriad, streaming analytics</td></tr>
+    <tr><td style="color:var(--cyan);font-weight:600">K-Finance</td><td>KOSPI/KOSDAQ, BOK rates, DART filings, CPI</td><td>Macro hedge funds, DeFi protocols</td></tr>
+    <tr><td style="color:var(--purple);font-weight:600">K-Sports</td><td>KBO, K-League, LCK esports, Korean athletes abroad</td><td>Sportradar supplement, sportsbooks</td></tr>
+    <tr><td style="color:var(--green);font-weight:600">K-Politics</td><td>Elections, polls, National Assembly bills</td><td>Polymarket, Kalshi, political analysts</td></tr>
+    <tr><td style="color:var(--white);font-weight:600">K-Corporate</td><td>Samsung/SK/Hyundai earnings, M&A, executive changes</td><td>Investment banks, crypto markets</td></tr>
+    <tr><td style="color:var(--dim);font-weight:600">K-Public</td><td>Gazette, court rulings, FTC decisions</td><td>LegalTech, B2B contract settlement</td></tr>
+    <tr><td style="color:var(--dim);font-weight:600">K-Society</td><td>Real estate prices, weather/disaster, CSAT results</td><td>Parametric insurance, real estate tokenization</td></tr>
+  </table>
+  <div style="height:12px"></div>
+  <div class="quote" style="font-size:15px">Korean language data = a domain UMA voters structurally cannot handle → <span class="bold">zero competition blue ocean.</span></div>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">11 / 14</span>
+</div>
+
+<!-- SLIDE 12: TEAM -->
+<div class="slide">
+  <span class="tag" style="margin-bottom:16px">Team</span>
+  <h2 style="font-size:28px">Traverse — Korea's Most <span class="accent">Compliant</span> Builder</h2>
+  <div style="height:8px"></div>
+  <div class="grid2">
+    <div>
+      <div class="quote" style="font-size:15px;margin-bottom:16px">Traverse builds the most creative yet compliant products in Korea's blockchain space. Our KYT capabilities have been recognized by Dunamu and industry leaders.</div>
+      <p style="font-size:14px;line-height:1.6;margin-bottom:16px">We've studied Polymarket + UMA's strengths and weaknesses, Korea's regulatory landscape, and the legal boundaries — to build a <span class="bold">Multi-LLM Agentic Oracle</span> and a <span class="bold">Social-Fi structure that eliminates speculation risk</span>.</p>
+      <div class="card" style="background:var(--bg2)">
+        <p style="font:600 15px var(--font-display);color:var(--white);line-height:1.5">"We believe every product we build can become the global leading standard. In that sense, we're the team most aligned with GIWA's vision."</p>
+      </div>
+    </div>
+    <div>
+      <h3>Core Capabilities</h3>
+      <div class="card" style="margin-bottom:10px;padding:16px"><p style="color:var(--blue);font-weight:600;font-size:14px"><span class="geo-icon" style="width:16px;height:16px"><svg viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8,11 V7 a4,4 0 0 1 8,0 v4" stroke-linecap="round"/></svg></span> KYT / Compliance</p><p style="font-size:13px">Industry-recognized by Dunamu. Built compliant infrastructure in Korea's strictest regulatory environment.</p></div>
+      <div class="card" style="margin-bottom:10px;padding:16px"><p style="color:var(--cyan);font-weight:600;font-size:14px"><span class="geo-icon" style="width:16px;height:16px"><svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="4" x2="12" y2="9" stroke-linecap="round"/><line x1="12" y1="15" x2="12" y2="20" stroke-linecap="round"/></svg></span> Multi-LLM AI Pipeline</p><p style="font-size:13px">Adaptive 2+1 oracle. Gemini + GPT + Grok. Evidence verification at $0.016/call.</p></div>
+      <div class="card" style="margin-bottom:10px;padding:16px"><p style="color:var(--purple);font-weight:600;font-size:14px"><span class="geo-icon" style="width:16px;height:16px"><svg viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><polygon points="12,2 22,8 22,16 12,22 2,16 2,8" stroke-linejoin="round"/></svg></span> Full-Stack Product</p><p style="font-size:13px">30+ pages shipped. Social feed, prediction, oracle, vault, economy — all live on testnet.</p></div>
+      <div class="card" style="padding:16px"><p style="color:var(--green);font-weight:600;font-size:14px"><span class="geo-icon" style="width:16px;height:16px"><svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M4,4 L20,4 L20,22 L4,22 Z" stroke-linejoin="round"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="14" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg></span> Legal Architecture</p><p style="font-size:13px">Event Attention SocialFi positioning. No gambling classification. Contribution-based rewards.</p></div>
+      <div style="height:12px"></div>
+      <p style="font:500 12px var(--font-mono);color:var(--muted)">Contact: alvin@traverse.kr</p>
+    </div>
+  </div>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">12 / 14</span>
+</div>
+
+<!-- SLIDE 13: ROADMAP -->
+<div class="slide">
+  <span class="tag" style="margin-bottom:16px">Roadmap</span>
+  <h2 style="font-size:28px">Phased Growth — <span class="accent">with GASOK</span></h2>
+  <div style="height:20px"></div>
+  <div class="timeline">
+    <div class="tl-item active">
+      <h3 style="color:var(--green)">Phase 1 — Core ✅</h3>
+      <p>30+ page SocialFi app. MOM Energy + Vault economy live. Adaptive 2+1 AI Oracle. Polymarket/Manifold/Kalshi integration. 4-stage recommendation algorithm. Giwa Sepolia mUSDC withdrawal.</p>
+    </div>
+    <div class="tl-item">
+      <h3>Phase 2 — Growth</h3>
+      <p>Giwa mainnet AIO on-chain records. User acquisition + community activation. Ad/sponsor revenue ramp. K-Culture + K-Sports data focus.</p>
+    </div>
+    <div class="tl-item">
+      <h3>Phase 3 — Scale</h3>
+      <p>Institutional verifier nodes (media consortium). B2B data licensing. Multi-language expansion (JP, CN). Cross-chain data supply.</p>
+    </div>
+  </div>
+  <div style="height:24px"></div>
+  <h3>Origin Story</h3>
+  <div class="grid2" style="gap:24px">
+    <div class="card" style="border-left:3px solid var(--muted);border-radius:0 12px 12px 0">
+      <p style="font:600 14px var(--font-display);color:var(--muted);margin-bottom:4px">BEFORE</p>
+      <p style="font-size:14px">"Model that doesn't work without media consortium" → Dependent, can't scale</p>
+    </div>
+    <div class="card" style="border-left:3px solid var(--blue);border-radius:0 12px 12px 0">
+      <p style="font:600 14px var(--font-display);color:var(--blue);margin-bottom:4px">NOW</p>
+      <p style="font-size:14px">"Model that works with AI alone" → Independent, instant scale. Institutions join later as trust layer upgrades.</p>
+    </div>
+  </div>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">13 / 14</span>
+</div>
+
+<!-- SLIDE 14: ASK -->
+<div class="slide">
+  <div class="cover-center" style="text-align:center">
+    <p style="font:300 16px var(--font-display);color:var(--muted);margin-bottom:24px;letter-spacing:.08em;text-transform:uppercase">The Ask</p>
+    <h1 style="font-size:38px;max-width:800px">Building Korea's most <span class="accent">compliant</span> prediction platform — <span class="accent">with GIWA</span>.</h1>
+    <div style="height:24px"></div>
+    <div class="grid4" style="max-width:900px;text-align:left">
+      <div class="card" style="text-align:center;padding:20px">
+        <div style="margin-bottom:8px"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><path d="M10,14 a5,5 0 0 1 0,-7 l3,-3 a5,5 0 0 1 7,7 l-1.5,1.5" stroke-linecap="round"/><path d="M14,10 a5,5 0 0 1 0,7 l-3,3 a5,5 0 0 1 -7,-7 l1.5,-1.5" stroke-linecap="round"/></svg></div>
+        <p style="font:600 14px var(--font-display);color:var(--white);margin-bottom:4px">Mainnet Onboarding</p>
+        <p style="font-size:12px">AIO on-chain + Vault mUSDC settlement</p>
+      </div>
+      <div class="card" style="text-align:center;padding:20px">
+        <div style="margin-bottom:8px"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12,1 l1,3.5 a1,1 0 0 0 1,.6 l3.5,-1 l-1,3.5 a1,1 0 0 0 .6,1 l3.5,1 l-3.5,1 a1,1 0 0 0 -.6,1 l1,3.5 l-3.5,-1 a1,1 0 0 0 -1,.6 l-1,3.5 l-1,-3.5 a1,1 0 0 0 -1,-.6 l-3.5,1 l1,-3.5 a1,1 0 0 0 -.6,-1 l-3.5,-1 l3.5,-1 a1,1 0 0 0 .6,-1 l-1,-3.5 l3.5,1 a1,1 0 0 0 1,-.6 Z" stroke-linejoin="round"/></svg></div>
+        <p style="font:600 14px var(--font-display);color:var(--white);margin-bottom:4px">Technical Support</p>
+        <p style="font-size:12px">EVM compatibility, RPC optimization</p>
+      </div>
+      <div class="card" style="text-align:center;padding:20px">
+        <div style="margin-bottom:8px"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><ellipse cx="12" cy="12" rx="5" ry="10"/><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/></svg></div>
+        <p style="font:600 14px var(--font-display);color:var(--white);margin-bottom:4px">Ecosystem Access</p>
+        <p style="font-size:12px">Oracle data supply to Giwa DApps</p>
+      </div>
+      <div class="card" style="text-align:center;padding:20px">
+        <div style="margin-bottom:8px"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><polygon points="12,2 15,9 22,9 16.5,14 18.5,21 12,17 5.5,21 7.5,14 2,9 9,9" stroke-linejoin="round" fill="rgba(34,197,94,.12)"/></svg></div>
+        <p style="font:600 14px var(--font-display);color:var(--white);margin-bottom:4px">Grant / Investment</p>
+        <p style="font-size:12px">Runway to user acquisition + first B2B deal</p>
+      </div>
+    </div>
+    <div style="height:24px"></div>
+    <div class="quote" style="max-width:700px;text-align:center;margin:0 auto;font-size:18px">The most compliant, yet most impactful.<br>The project most aligned with <span class="bold">GIWA</span> — <span class="bold accent">momment.</span></div>
+    <div style="height:20px"></div>
+    <a href="https://momment.mom" target="_blank" style="font:600 16px var(--font-mono);color:var(--blue);text-decoration:none;padding:10px 28px;border:1px solid var(--blue);border-radius:24px;background:var(--blue-glow);transition:all .2s">momment.mom</a>
+    <div style="height:16px"></div>
+    <p style="font:500 14px var(--font-mono);color:var(--muted)">alvin@traverse.kr · Traverse Team · 2026</p>
+  </div>
+  <span class="brand-mark">momment.</span>
+  <span class="slide-number">14 / 14</span>
+</div>
+
+</div>
+</body>
+</html>

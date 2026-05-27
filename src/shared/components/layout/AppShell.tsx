@@ -10,7 +10,7 @@ import { TopBar } from "@/shared/components/layout/TopBar";
 import { GlobalAdScripts } from "@/shared/components/ads/NetworkAds";
 
 /** Pages that should use full-width center column (no max-w constraint) */
-const FULL_WIDTH_PATHS = ["/explore", "/search", "/markets"];
+const FULL_WIDTH_PATHS = ["/explore", "/search", "/markets", "/about"];
 
 /** Pages that bypass AppShell entirely (they provide their own shell) */
 const BYPASS_SHELL_PATHS = ["/terminal"];

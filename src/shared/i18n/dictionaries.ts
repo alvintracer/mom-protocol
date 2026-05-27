@@ -142,6 +142,8 @@ export const dictionary = {
     topUp: text("충전", "Top up", "Recargar"),
     energyUnit: text("MOM", "MOM", "MOM"),
     economyDocs: text("momment. 소셜파이 구조", "momment. Social-fi Structure", "Estructura Social-fi de momment."),
+    aboutMomment: text("About momment.", "About momment.", "About momment."),
+    downloadPdf: text("PDF 다운로드", "Download PDF", "Descargar PDF"),
   },
   search: {
     title: text("검색", "Search", "Buscar"),

@@ -631,6 +631,17 @@ export function RightSidebar() {
             <Link href="/economy" className="hover:underline font-bold text-blue-600 dark:text-blue-400">
               {t(dictionary.sidebar.economyDocs ?? { ko: "momment. 이코노미 구조", en: "momment. Economy", es: "Economía momment." })}
             </Link>
+            <Link href="/about" className="hover:underline font-bold text-blue-600 dark:text-blue-400">
+              {t(dictionary.sidebar.aboutMomment)}
+            </Link>
+            <a
+              href="https://xjbxslhbilveszgywurq.supabase.co/storage/v1/object/public/etc/momment_pitchdeck.pdf"
+              download="momment_pitchdeck.pdf"
+              className="hover:underline flex items-center gap-1"
+            >
+              <RiArrowRightUpLine className="size-3" />
+              {t(dictionary.sidebar.downloadPdf)}
+            </a>
             <a href="/terms" className="hover:underline">{t(dictionary.footer.terms)}</a>
             <a href="/privacy" className="hover:underline">{t(dictionary.footer.privacy)}</a>
             <a href="/cookies" className="hover:underline">{t(dictionary.footer.cookies)}</a>
