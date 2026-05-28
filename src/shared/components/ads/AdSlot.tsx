@@ -49,6 +49,9 @@ const ADSENSE_ENABLED = process.env.NEXT_PUBLIC_ADSENSE_ENABLED === "true";
  *
  * Priority: Self-serve ad > AdSense > Hidden
  * All ads are clearly labeled "Ad" and styled to blend with the momment. design system.
+ *
+ * Ad blocker detection: after rendering network/adsense ads, checks if
+ * the ad actually loaded. If blocked, hides the slot entirely.
  */
 export function AdSlot({ position, size = "native", adsenseSlot, clusterId, className = "" }: AdSlotProps) {
   const { dictionary, t } = useI18n();
@@ -56,6 +59,7 @@ export function AdSlot({ position, size = "native", adsenseSlot, clusterId, clas
   const [selfServeLoaded, setSelfServeLoaded] = useState(false);
   const [networkAd, setNetworkAd] = useState<{ script_code: string } | null>(null);
   const [networkLoaded, setNetworkLoaded] = useState(false);
+  const [adBlocked, setAdBlocked] = useState(false);
   const adRef = useRef<HTMLDivElement>(null);
 
   // Load self-serve ad
@@ -144,8 +148,11 @@ export function AdSlot({ position, size = "native", adsenseSlot, clusterId, clas
       .then(() => {});
   }, [selfServeAd, position, clusterId]);
 
-  // Wait for both loaders to finish
-  if (!selfServeLoaded && !networkLoaded) return null;
+  // Wait for BOTH loaders to finish (fixed: was && which is wrong)
+  if (!selfServeLoaded || !networkLoaded) return null;
+
+  // If ad blocker detected, hide slot entirely
+  if (adBlocked) return null;
 
   // Priority 1: Self-serve ad
   if (selfServeAd) {
@@ -205,31 +212,28 @@ export function AdSlot({ position, size = "native", adsenseSlot, clusterId, clas
     );
   }
 
-  // Priority 2: Network ad script (Adsterra, etc.)
+  // Priority 2: Network ad script (Adsterra, etc.) — with blocker detection
   if (networkAd) {
     return (
-      <div className={className} ref={adRef}>
-        <NetworkScriptRenderer html={networkAd.script_code} />
-      </div>
+      <NetworkAdWithBlockerDetection
+        className={className}
+        scriptCode={networkAd.script_code}
+        onBlocked={() => setAdBlocked(true)}
+      />
     );
   }
 
-  // Priority 3: Google AdSense
+  // Priority 3: Google AdSense — with blocker detection
   if (ADSENSE_ENABLED && ADSENSE_CLIENT && adsenseSlot) {
     return (
-      <div className={`${className}`} ref={adRef}>
-        <div className="overflow-hidden rounded-2xl border border-border/40">
-          <div className="flex items-center gap-1 px-3 pt-2">
-            <span className="flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-muted-foreground dark:bg-zinc-800">
-              <RiAdvertisementLine className="size-2.5" />
-              {t(dictionary.ads.sponsored)}
-            </span>
-          </div>
-          <div className="p-2">
-            <AdSenseUnit client={ADSENSE_CLIENT} slot={adsenseSlot} format={adsenseFormat(size)} />
-          </div>
-        </div>
-      </div>
+      <AdSenseWithBlockerDetection
+        className={className}
+        client={ADSENSE_CLIENT}
+        slot={adsenseSlot}
+        size={size}
+        sponsoredLabel={t(dictionary.ads.sponsored)}
+        onBlocked={() => setAdBlocked(true)}
+      />
     );
   }
 
@@ -237,19 +241,66 @@ export function AdSlot({ position, size = "native", adsenseSlot, clusterId, clas
   return null;
 }
 
-/* ── AdSense Unit ───────────────────────────────────────────── */
+/* ── Network Ad with Blocker Detection ─────────────────────── */
 
-function AdSenseUnit({ client, slot, format }: { client: string; slot: string; format: string }) {
-  const containerRef = useRef<HTMLModElement>(null);
+function NetworkAdWithBlockerDetection({
+  className,
+  scriptCode,
+  onBlocked,
+}: {
+  className: string;
+  scriptCode: string;
+  onBlocked: () => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!containerRef.current) return;
+      const el = containerRef.current;
+      // Check if the container has any visible content (iframe, img, or meaningful height)
+      const hasIframe = el.querySelector("iframe");
+      const hasImg = el.querySelector("img");
+      const hasContent = el.offsetHeight > 10;
+      if (!hasIframe && !hasImg && !hasContent) {
+        onBlocked();
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [onBlocked]);
+
+  return (
+    <div className={className} ref={containerRef}>
+      <NetworkScriptRenderer html={scriptCode} />
+    </div>
+  );
+}
+
+/* ── AdSense with Blocker Detection ────────────────────────── */
+
+function AdSenseWithBlockerDetection({
+  className,
+  client,
+  slot,
+  size,
+  sponsoredLabel,
+  onBlocked,
+}: {
+  className: string;
+  client: string;
+  slot: string;
+  size: SlotSize;
+  sponsoredLabel: string;
+  onBlocked: () => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const pushed = useRef(false);
 
   useEffect(() => {
-    // Reset on each mount so re-renders on route change can re-push
     pushed.current = false;
 
     function tryPush() {
       if (pushed.current) return;
-      // Don't push if container has no width (causes AdSense error)
       if (containerRef.current && containerRef.current.offsetWidth === 0) return;
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -258,7 +309,7 @@ function AdSenseUnit({ client, slot, format }: { client: string; slot: string; f
           ads.push({});
           pushed.current = true;
         } else {
-          // Script not loaded yet — retry
+          // Script not loaded (possibly blocked) — retry once
           setTimeout(tryPush, 500);
         }
       } catch {
@@ -266,22 +317,54 @@ function AdSenseUnit({ client, slot, format }: { client: string; slot: string; f
       }
     }
 
-    // Give the <ins> element a tick to mount, then push
     const timer = setTimeout(tryPush, 200);
-    return () => clearTimeout(timer);
+
+    // Blocker detection: check after 3s if the ad actually rendered
+    const blockerTimer = setTimeout(() => {
+      if (!containerRef.current) return;
+      const ins = containerRef.current.querySelector("ins.adsbygoogle");
+      if (!ins) {
+        onBlocked();
+        return;
+      }
+      const insEl = ins as HTMLElement;
+      // AdSense sets data-ad-status when it fills (or doesn't)
+      const adStatus = insEl.getAttribute("data-ad-status");
+      const insHeight = insEl.offsetHeight;
+      // If status is "unfilled" or height is 0, it's blocked or empty
+      if (adStatus === "unfilled" || insHeight === 0) {
+        onBlocked();
+      }
+    }, 3500);
+
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(blockerTimer);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <ins
-      ref={containerRef}
-      className="adsbygoogle"
-      style={{ display: "block", minHeight: 100 }}
-      data-ad-client={client}
-      data-ad-slot={slot}
-      data-ad-format={format}
-      data-full-width-responsive="true"
-    />
+    <div className={className} ref={containerRef}>
+      <div className="overflow-hidden rounded-2xl border border-border/40">
+        <div className="flex items-center gap-1 px-3 pt-2">
+          <span className="flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-muted-foreground dark:bg-zinc-800">
+            <RiAdvertisementLine className="size-2.5" />
+            {sponsoredLabel}
+          </span>
+        </div>
+        <div className="p-2">
+          <ins
+            className="adsbygoogle"
+            style={{ display: "block", minHeight: 100 }}
+            data-ad-client={client}
+            data-ad-slot={slot}
+            data-ad-format={adsenseFormat(size)}
+            data-full-width-responsive="true"
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 

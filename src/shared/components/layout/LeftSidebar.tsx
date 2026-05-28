@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/shared/components/ThemeToggle";
 import { LanguageSelect } from "@/shared/i18n/LanguageSelect";
 import { createClient } from "@/shared/lib/supabase/client";
 import type { Database } from "@/shared/types/database";
+import { useUnreadNotificationCount } from "@/shared/hooks/useUnreadNotificationCount";
 import { 
   RiHome7Fill, 
   RiBarChartGroupedFill, 
@@ -32,6 +33,7 @@ export function LeftSidebar() {
   const [email, setEmail] = useState<string | null>(null);
   const [showMore, setShowMore] = useState(false);
   const [momRate, setMomRate] = useState<number>(0.001);
+  const unreadCount = useUnreadNotificationCount();
 
   useEffect(() => {
     let mounted = true;
@@ -164,7 +166,14 @@ export function LeftSidebar() {
                 href={item.href}
                 className="flex items-center justify-center gap-4 rounded-full px-3 py-2.5 text-[16px] font-semibold text-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/50 xl:justify-start xl:px-4"
               >
-                <Icon className="size-[22px] shrink-0" />
+                <span className="relative">
+                  <Icon className="size-[22px] shrink-0" />
+                  {item.href === "/notifications" && unreadCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-black text-white">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </span>
                 <span className="hidden xl:inline">{item.label}</span>
               </Link>
             );

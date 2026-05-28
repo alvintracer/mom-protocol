@@ -14,10 +14,12 @@ import {
   RiListCheck2,
   RiSearchLine,
   RiSendPlane2Line,
+  RiVipDiamondLine,
 } from "react-icons/ri";
 
 import { useI18n } from "@/shared/i18n/LanguageProvider";
 import { createClient } from "@/shared/lib/supabase/client";
+import { PremiumEditor } from "@/shared/components/editor/PremiumEditor";
 import type { Database, Json, SupportedLanguage } from "@/shared/types/database";
 
 type AttentionRow = Database["public"]["Tables"]["attention_clusters"]["Row"];
@@ -89,6 +91,11 @@ function EditPostContent({ postId }: { postId: string }) {
   const [isFetchingLink, setIsFetchingLink] = useState(false);
   const [status, setStatus] = useState<"idle" | "loading" | "saving" | "posting" | "error" | "login">("loading");
   const [postData, setPostData] = useState<any>(null);
+  // Premium post
+  const [isPremium, setIsPremium] = useState(false);
+  const [premiumCost, setPremiumCost] = useState<string>("");
+  const [momRate, setMomRate] = useState<number>(0.001);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const attentionParam = searchParams.get("attention");
@@ -157,6 +164,8 @@ function EditPostContent({ postId }: { postId: string }) {
           setLinkPreview({ image: data.link_image_url, title: data.link_title || "", description: data.link_description || "" });
         }
         if (data.selected_outcome) setSelectedOutcome(data.selected_outcome);
+        setIsPremium(data.is_premium ?? false);
+        setPremiumCost(data.premium_energy_cost ? String(data.premium_energy_cost) : "");
 
         if (Array.isArray(data.media_items)) {
           const loadedMediaItems: MediaItem[] = data.media_items.map((m: any) => ({
@@ -218,6 +227,19 @@ function EditPostContent({ postId }: { postId: string }) {
     loadPost();
     return () => { mounted = false; };
   }, [postId]);
+
+  // Fetch MOM rate for premium price display + current user ID
+  useEffect(() => {
+    fetch("/api/rate")
+      .then((r) => r.json())
+      .then((d) => { if (d.rate) setMomRate(d.rate); })
+      .catch(() => {});
+    createClient().auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setCurrentUserId(data.user.id);
+      }
+    });
+  }, []);
 
   // Load quoted post
   useEffect(() => {
@@ -502,6 +524,9 @@ function EditPostContent({ postId }: { postId: string }) {
           attention_cluster_id: selectedAttention?.id ?? null,
           selected_outcome: selectedOutcome || null,
           media_items: uploadedMediaItems as Json,
+          is_premium: isPremium,
+          premium_energy_cost: isPremium && premiumCost ? Number(premiumCost) : null,
+          content_format: isPremium ? "html" : "plain",
         })
         .eq("id", postId)
         .eq("user_id", userData.user.id);
@@ -529,6 +554,68 @@ function EditPostContent({ postId }: { postId: string }) {
 
       <main className="mx-auto grid max-w-5xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className="space-y-4">
+          {/* Premium post toggle — top of form */}
+          <section className="rounded-2xl border border-border bg-background shadow-sm overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setIsPremium(!isPremium)}
+              className={`flex h-14 w-full items-center gap-3 px-4 text-left transition-colors ${
+                isPremium
+                  ? "bg-blue-500/5 border-b border-blue-500/20"
+                  : "hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
+              }`}
+            >
+              <div className={`flex size-8 items-center justify-center rounded-lg transition-colors ${
+                isPremium ? "bg-blue-500/15 text-blue-600" : "bg-zinc-100 text-muted-foreground dark:bg-zinc-800"
+              }`}>
+                <RiVipDiamondLine className="size-4" />
+              </div>
+              <span className={`text-sm font-black ${isPremium ? "text-blue-600 dark:text-blue-400" : "text-foreground"}`}>
+                {t(dictionary.postCreate.premiumLabel)}
+              </span>
+              <div className={`ml-auto flex size-5 items-center justify-center rounded-full border-2 transition-all ${
+                isPremium
+                  ? "border-blue-500 bg-blue-500"
+                  : "border-border"
+              }`}>
+                {isPremium && (
+                  <svg viewBox="0 0 12 12" className="size-3 text-white">
+                    <path d="M3.5 6.5L5 8l3.5-4" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+            </button>
+
+            {isPremium && (
+              <div className="space-y-3 p-4">
+                <div>
+                  <label className="text-xs font-bold text-muted-foreground">
+                    {t(dictionary.postCreate.premiumUnlockPrice)}
+                  </label>
+                  <div className="mt-1.5 flex items-center gap-3">
+                    <input
+                      type="number"
+                      min="1"
+                      max="10000"
+                      value={premiumCost}
+                      onChange={(e) => setPremiumCost(e.target.value)}
+                      placeholder={t(dictionary.postCreate.premiumPlaceholder)}
+                      className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm font-bold text-foreground outline-none focus:border-blue-500 [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    {premiumCost && Number(premiumCost) > 0 && (
+                      <span className="shrink-0 text-sm font-bold text-muted-foreground">
+                        ≈ ${(Number(premiumCost) * momRate).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[11px] font-medium leading-4 text-muted-foreground">
+                  {t(dictionary.postCreate.premiumFeeNotice)}
+                </p>
+              </div>
+            )}
+          </section>
+
           <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
             <button
               type="button"
@@ -641,17 +728,39 @@ function EditPostContent({ postId }: { postId: string }) {
               className="mt-2 h-12 w-full rounded-xl border border-border bg-background px-4 text-[17px] font-black text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-500"
             />
 
-            <label className="mt-4 block text-sm font-black text-foreground">
-              {t(dictionary.postCreate.bodyLabel)}
-            </label>
-            <textarea
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
-              placeholder={t(dictionary.postCreate.bodyPlaceholder)}
-              rows={7}
-              className="mt-2 min-h-44 w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-[16px] font-medium leading-7 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-500"
-            />
+            {!isPremium && (
+              <>
+                <label className="mt-4 block text-sm font-black text-foreground">
+                  {t(dictionary.postCreate.bodyLabel)}
+                </label>
+                <textarea
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
+                  placeholder={t(dictionary.postCreate.bodyPlaceholder)}
+                  rows={5}
+                  maxLength={500}
+                  className="mt-2 min-h-32 w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-[16px] font-medium leading-7 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-blue-500"
+                />
+                <p className={`mt-1 text-right text-[11px] font-bold ${body.length > 450 ? "text-red-500" : "text-muted-foreground/50"}`}>
+                  {body.length} / 500
+                </p>
+              </>
+            )}
           </section>
+
+          {isPremium && (
+            <>
+              <PremiumEditor
+                value={body}
+                onChange={setBody}
+                placeholder={t(dictionary.postCreate.bodyPlaceholder)}
+                userId={currentUserId}
+              />
+              <p className={`-mt-2 text-right text-[11px] font-bold ${stripHtmlLen(body) > 28000 ? "text-red-500" : "text-muted-foreground/50"}`}>
+                {stripHtmlLen(body).toLocaleString()} / 30,000
+              </p>
+            </>
+          )}
 
           <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
@@ -1018,4 +1127,8 @@ function getVideoDuration(file: File): Promise<number> {
     };
     video.src = URL.createObjectURL(file);
   });
+}
+
+function stripHtmlLen(html: string): number {
+  return html.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").length;
 }

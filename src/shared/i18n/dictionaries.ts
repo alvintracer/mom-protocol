@@ -1345,8 +1345,8 @@ export const dictionary = {
     ),
     displayName: text("표시 이름", "Display name", "Nombre visible"),
     handle: text("핸들", "Handle", "Usuario"),
-    avatarUrl: text("프로필 이미지 URL", "Profile image URL", "URL de imagen de perfil"),
-    bannerUrl: text("배경 이미지 URL", "Background image URL", "URL de imagen de fondo"),
+    avatarUrl: text("프로필 이미지", "Profile image", "Imagen de perfil"),
+    bannerUrl: text("배경 이미지", "Background image", "Imagen de fondo"),
     bio: text("소개", "Bio", "Bio"),
     bioPlaceholder: text(
       "관심 있는 이벤트와 전문 분야를 적어주세요.",
