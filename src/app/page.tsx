@@ -199,47 +199,53 @@ function HomeFeed() {
           feedData = [];
         }
       } else if (user) {
-        // "For You" — try personalized recommendations
-        const { data: recommended } = await supabase.rpc(
-          "get_recommended_post_ids",
-          { p_user_id: user.id, p_limit: 20 },
-        );
-        const recIds = (recommended ?? []).map(
-          (r: { post_id: string }) => r.post_id,
-        );
-
-        if (recIds.length >= 5) {
-          // Fetch posts in recommended order
-          const { data: recPosts } = await supabase
-            .from("posts")
-            .select("*")
-            .in("id", recIds);
-          const recMap = new Map((recPosts ?? []).map((p) => [p.id, p]));
-          feedData = recIds
-            .map((id: string) => recMap.get(id))
-            .filter((p): p is PostRow => p != null);
-
-          // Backfill with latest posts if recommendations are < 20
-          if (feedData.length < 20) {
-            const existingIds = new Set(feedData.map((p) => p.id));
-            const { data: backfillPosts } = await supabase
-              .from("posts")
-              .select("*")
-              .eq("visibility", "public")
-              .eq("is_deleted", false)
-              .order("created_at", { ascending: false })
-              .limit(20);
-            for (const p of backfillPosts ?? []) {
-              if (!existingIds.has(p.id) && feedData.length < 20) {
-                feedData.push(p);
-                existingIds.add(p.id);
-              }
-            }
-          }
-        } else {
-          // Not enough recommendations → chronological fallback
+        // Board view always fetches chronologically; Feed view uses recommendations
+        if (viewMode === "board") {
           const { data: allPosts } = await postQuery;
           feedData = allPosts ?? [];
+        } else {
+          // "For You" — try personalized recommendations
+          const { data: recommended } = await supabase.rpc(
+            "get_recommended_post_ids",
+            { p_user_id: user.id, p_limit: 20 },
+          );
+          const recIds = (recommended ?? []).map(
+            (r: { post_id: string }) => r.post_id,
+          );
+
+          if (recIds.length >= 5) {
+            // Fetch posts in recommended order
+            const { data: recPosts } = await supabase
+              .from("posts")
+              .select("*")
+              .in("id", recIds);
+            const recMap = new Map((recPosts ?? []).map((p) => [p.id, p]));
+            feedData = recIds
+              .map((id: string) => recMap.get(id))
+              .filter((p): p is PostRow => p != null);
+
+            // Backfill with latest posts if recommendations are < 20
+            if (feedData.length < 20) {
+              const existingIds = new Set(feedData.map((p) => p.id));
+              const { data: backfillPosts } = await supabase
+                .from("posts")
+                .select("*")
+                .eq("visibility", "public")
+                .eq("is_deleted", false)
+                .order("created_at", { ascending: false })
+                .limit(20);
+              for (const p of backfillPosts ?? []) {
+                if (!existingIds.has(p.id) && feedData.length < 20) {
+                  feedData.push(p);
+                  existingIds.add(p.id);
+                }
+              }
+            }
+          } else {
+            // Not enough recommendations → chronological fallback
+            const { data: allPosts } = await postQuery;
+            feedData = allPosts ?? [];
+          }
         }
       } else {
         const { data: allPosts } = await postQuery;
@@ -453,7 +459,7 @@ function HomeFeed() {
       mounted = false;
       authListener.subscription.unsubscribe();
     };
-  }, [activeFeed, dictionary.home.linkedAttentionFallbackDesc]);
+  }, [activeFeed, viewMode, dictionary.home.linkedAttentionFallbackDesc]);
 
   // Filter posts by active topic
   const displayPosts = useMemo(() => {
