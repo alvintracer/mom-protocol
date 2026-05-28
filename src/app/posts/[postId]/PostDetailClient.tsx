@@ -69,6 +69,8 @@ export function PostDetailClient({
   const [editBody, setEditBody] = useState("");
   const [commentMenuOpen, setCommentMenuOpen] = useState<string | null>(null);
   const [likedCommentIds, setLikedCommentIds] = useState<Set<string>>(new Set());
+  const [commentOutcome, setCommentOutcome] = useState<string | null>(null);
+  const [outcomeOptions, setOutcomeOptions] = useState<string[]>([]);
   const commentFormRef = useRef<HTMLFormElement>(null);
   const [isReposting, setIsReposting] = useState(false);
   // Premium state
@@ -224,6 +226,21 @@ export function PostDetailClient({
       setPost(postData);
       setAuthor(authorData ?? null);
       setAttention(attentionData ?? null);
+
+      // Load outcome options from attention_rules
+      if (attentionData) {
+        const { data: ruleData } = await supabase
+          .from("attention_rules")
+          .select("supported_outcomes")
+          .eq("event_id", attentionData.canonical_event_id || '')
+          .maybeSingle();
+        if (ruleData?.supported_outcomes) {
+          const opts = (ruleData.supported_outcomes as string[]).filter(
+            (o: string) => o.toLowerCase() !== 'ambiguous'
+          );
+          if (mounted) setOutcomeOptions(opts);
+        }
+      }
       setRepostSource(sourceData ?? null);
       setRepostAuthor(sourceAuthorData ?? null);
       setHasLiked(Boolean(reactionData));
@@ -378,6 +395,7 @@ export function PostDetailClient({
       original_language: language as SupportedLanguage,
       original_body: reply.trim(),
       translation_status: "pending",
+      selected_outcome: commentOutcome,
     };
     if (replyToComment) {
       insertData.parent_comment_id = replyToComment.id;
@@ -414,6 +432,7 @@ export function PostDetailClient({
     );
     setReply("");
     setReplyToComment(null);
+    setCommentOutcome(null);
     setIsSubmitting(false);
   }
 
@@ -611,9 +630,13 @@ export function PostDetailClient({
 
       <article className="border-b border-border p-4 sm:p-6">
         <div className="flex gap-3">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-black text-background">
-            {initial(authorLabel)}
-          </div>
+          {author?.avatar_url ? (
+            <img src={author.avatar_url} alt="" className="size-11 rounded-full object-cover" />
+          ) : (
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-black text-background">
+              {initial(authorLabel)}
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[15px]">
               <span className="font-bold text-foreground">{authorLabel}</span>
@@ -904,6 +927,33 @@ export function PostDetailClient({
                     <button onClick={() => setReplyToComment(null)} className="text-muted-foreground hover:text-foreground">✕</button>
                   </div>
                 )}
+                {outcomeOptions.length > 0 && (
+                  <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 mb-2">
+                    <span className="text-[11px] font-bold text-muted-foreground shrink-0">
+                      {t(dictionary.postDetail.commentOutcome)}
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {outcomeOptions.map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setCommentOutcome(commentOutcome === opt ? null : opt)}
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-black transition-colors ${
+                            commentOutcome === opt
+                              ? opt.toLowerCase() === 'yes' || opt.toLowerCase() === 'above'
+                                ? 'bg-emerald-600 text-white'
+                                : opt.toLowerCase() === 'no' || opt.toLowerCase() === 'below'
+                                  ? 'bg-rose-600 text-white'
+                                  : 'bg-amber-600 text-white'
+                              : 'bg-zinc-100 text-muted-foreground hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700'
+                          }`}
+                        >
+                          {opt.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <textarea
                   id="comment-textarea"
                   value={reply}
@@ -968,14 +1018,29 @@ export function PostDetailClient({
                 <article key={comment.id} className="p-4 sm:p-6">
                   {/* Top-level comment */}
                   <div className="flex gap-3">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-black text-white dark:bg-zinc-200 dark:text-zinc-900">
-                      {initial(commentAuthorLabel)}
-                    </div>
+                    {commentAuthor?.avatar_url ? (
+                      <img src={commentAuthor.avatar_url} alt="" className="size-9 rounded-full object-cover" />
+                    ) : (
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-black text-white dark:bg-zinc-200 dark:text-zinc-900">
+                        {initial(commentAuthorLabel)}
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-1.5 text-sm">
                         <span className="font-bold text-foreground">
                           {commentAuthorLabel}
                         </span>
+                        {(comment as any).selected_outcome && (
+                          <span className={`ml-1.5 rounded-full px-2 py-0.5 text-[10px] font-black ${
+                            (comment as any).selected_outcome.toLowerCase() === 'yes' || (comment as any).selected_outcome.toLowerCase() === 'above'
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                              : (comment as any).selected_outcome.toLowerCase() === 'no' || (comment as any).selected_outcome.toLowerCase() === 'below'
+                                ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400'
+                                : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                          }`}>
+                            {(comment as any).selected_outcome.toUpperCase()}
+                          </span>
+                        )}
                         <span className="text-muted-foreground">
                           · {formatDate(comment.created_at, language)}
                         </span>
@@ -1081,12 +1146,27 @@ export function PostDetailClient({
                         const srLabel = srAuthor?.display_name ?? srAuthor?.handle ?? `u/${sr.user_id.slice(0, 8)}`;
                         return (
                           <div key={sr.id} className="flex gap-2">
-                            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-[10px] font-black text-white dark:bg-zinc-300 dark:text-zinc-900">
-                              {initial(srLabel)}
-                            </div>
+                            {srAuthor?.avatar_url ? (
+                              <img src={srAuthor.avatar_url} alt="" className="size-7 rounded-full object-cover" />
+                            ) : (
+                              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-[10px] font-black text-white dark:bg-zinc-300 dark:text-zinc-900">
+                                {initial(srLabel)}
+                              </div>
+                            )}
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-x-1.5 text-[13px]">
                                 <span className="font-bold text-foreground">{srLabel}</span>
+                                {(sr as any).selected_outcome && (
+                                  <span className={`ml-1.5 rounded-full px-2 py-0.5 text-[10px] font-black ${
+                                    (sr as any).selected_outcome.toLowerCase() === 'yes' || (sr as any).selected_outcome.toLowerCase() === 'above'
+                                      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                                      : (sr as any).selected_outcome.toLowerCase() === 'no' || (sr as any).selected_outcome.toLowerCase() === 'below'
+                                        ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400'
+                                        : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                  }`}>
+                                    {(sr as any).selected_outcome.toUpperCase()}
+                                  </span>
+                                )}
                                 <span className="text-muted-foreground">· {formatDate(sr.created_at, language)}</span>
                                 {/* Edit/Delete for own sub-replies */}
                                 {sr.user_id === userId && (

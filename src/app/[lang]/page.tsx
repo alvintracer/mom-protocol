@@ -769,6 +769,7 @@ function mapPostRowToSocialPost(
     authorName: text(authorLabel, authorLabel, authorLabel),
     authorHandle: handle,
     avatarInitials: initial(authorLabel),
+    avatarUrl: profile?.avatar_url ?? null,
     createdAtLabel: text(
       formatRelative(row.created_at, "ko-KR"),
       formatRelative(row.created_at, "en-US"),

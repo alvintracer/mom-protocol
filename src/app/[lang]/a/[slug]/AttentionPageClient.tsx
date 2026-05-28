@@ -72,6 +72,7 @@ export function AttentionPageClient({ slug }: { slug: string }) {
     "loading",
   );
   const [now, setNow] = useState(() => Date.now());
+  const [outcomeCounts, setOutcomeCounts] = useState<{ outcome: string; count: number }[]>([]);
 
   // Tick every second for countdown timer
   useEffect(() => {
@@ -194,6 +195,18 @@ export function AttentionPageClient({ slug }: { slug: string }) {
       }
 
       setStatus("ready");
+
+      // Fetch outcome counts via RPC (posts + comments combined)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: countsData } = await (supabase as any).rpc("get_outcome_counts", {
+        p_cluster_id: clusterData.id,
+      });
+      if (mounted && Array.isArray(countsData)) {
+        setOutcomeCounts(countsData.map((c: { outcome: string; count: number }) => ({
+          outcome: c.outcome,
+          count: Number(c.count),
+        })));
+      }
 
       // Load translations for the cluster
       if (clusterData.canonical_event_id) {
@@ -712,7 +725,7 @@ export function AttentionPageClient({ slug }: { slug: string }) {
             attentionId={cluster.id}
             attentionSlug={displaySlug}
             outcomeOptions={outcomeOptions}
-            outcomeCounts={computeOutcomeCounts(posts, outcomeOptions)}
+            outcomeCounts={outcomeCounts.length > 0 ? outcomeCounts : computeOutcomeCounts(posts, outcomeOptions)}
             isLoggedIn={Boolean(userId)}
           />
 

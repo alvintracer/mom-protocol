@@ -93,9 +93,13 @@ export function SocialPostCard({ post, linkedEvent, translatedBody, translatedTi
       )}
       <Link href={`/posts/${post.id}`} className="block px-4 py-3.5 sm:px-5">
         <div className="flex gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-zinc-800 to-zinc-950 dark:from-zinc-100 dark:to-white text-sm font-bold text-white dark:text-zinc-950 ring-2 ring-background">
-            {post.avatarInitials}
-          </div>
+          {post.avatarUrl ? (
+            <img src={post.avatarUrl} alt="" className="size-10 shrink-0 rounded-full object-cover ring-2 ring-background" />
+          ) : (
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-zinc-800 to-zinc-950 dark:from-zinc-100 dark:to-white text-sm font-bold text-white dark:text-zinc-950 ring-2 ring-background">
+              {post.avatarInitials}
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             {post.postKind === "repost" ? (
               <p className="mb-1 text-xs font-black text-muted-foreground">

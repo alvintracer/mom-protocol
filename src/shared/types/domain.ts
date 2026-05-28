@@ -120,6 +120,7 @@ export type SocialPost = {
   authorName: LocalizedText;
   authorHandle: string;
   avatarInitials: string;
+  avatarUrl?: string | null;
   createdAtLabel: LocalizedText;
   createdAt: string;
   linkedEventId: string | null;

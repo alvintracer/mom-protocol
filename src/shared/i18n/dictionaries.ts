@@ -418,6 +418,12 @@ export const dictionary = {
       "Delete this comment?",
       "¿Eliminar este comentario?",
     ),
+    commentOutcome: text("케이스 선택", "Select case", "Seleccionar caso"),
+    commentOutcomeHint: text(
+      "이 어텐션의 케이스를 선택할 수 있습니다",
+      "You can select a case for this attention",
+      "Puedes seleccionar un caso para esta atención",
+    ),
   },
   attentionDetail: {
     join: text("Join", "Join", "Unirse"),
