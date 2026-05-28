@@ -68,6 +68,7 @@ export function PostDetailClient({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
   const [commentMenuOpen, setCommentMenuOpen] = useState<string | null>(null);
+  const [likedCommentIds, setLikedCommentIds] = useState<Set<string>>(new Set());
   const commentFormRef = useRef<HTMLFormElement>(null);
   const [isReposting, setIsReposting] = useState(false);
   // Premium state
@@ -244,6 +245,22 @@ export function PostDetailClient({
             source: l.source,
           })),
         );
+      }
+
+      // Fetch user's liked comments
+      if (userData.user) {
+        const commentIds = (commentRows ?? []).map((c) => c.id);
+        if (commentIds.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: myLikes } = await (supabase as any)
+            .from("comment_likes")
+            .select("comment_id")
+            .eq("user_id", userData.user.id)
+            .in("comment_id", commentIds);
+          if (myLikes) {
+            setLikedCommentIds(new Set(myLikes.map((l: { comment_id: string }) => l.comment_id)));
+          }
+        }
       }
 
       setStatus("ready");
@@ -457,6 +474,49 @@ export function PostDetailClient({
     setPost((current) =>
       current ? { ...current, like_count: likeCount } : current,
     );
+  }
+
+  async function handleCommentLike(commentId: string) {
+    if (!userId) return;
+    const supabase = createClient();
+
+    // Optimistic update
+    const wasLiked = likedCommentIds.has(commentId);
+    setLikedCommentIds((prev) => {
+      const next = new Set(prev);
+      if (wasLiked) next.delete(commentId);
+      else next.add(commentId);
+      return next;
+    });
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === commentId
+          ? { ...c, like_count: (c as any).like_count + (wasLiked ? -1 : 1) }
+          : c,
+      ),
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc("toggle_comment_like", {
+      target_comment_id: commentId,
+    });
+
+    if (error || !data) {
+      // Revert optimistic update
+      setLikedCommentIds((prev) => {
+        const next = new Set(prev);
+        if (wasLiked) next.add(commentId);
+        else next.delete(commentId);
+        return next;
+      });
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId
+            ? { ...c, like_count: (c as any).like_count + (wasLiked ? 1 : -1) }
+            : c,
+        ),
+      );
+    }
   }
 
   async function handleRepost(quote?: string) {
@@ -1002,7 +1062,13 @@ export function PostDetailClient({
                           {t(dictionary.postDetail.subReply)}
                           {childReplies.length > 0 && <span className="text-blue-500">{childReplies.length}</span>}
                         </button>
-                        <ActionIcon icon={<RiHeart3Line className="size-4" />} />
+                        <button
+                          onClick={() => handleCommentLike(comment.id)}
+                          className={`flex items-center gap-1 text-xs font-bold transition-colors ${likedCommentIds.has(comment.id) ? "text-red-500" : "hover:text-red-500"}`}
+                        >
+                          {likedCommentIds.has(comment.id) ? <RiHeart3Fill className="size-4 text-red-500" /> : <RiHeart3Line className="size-4" />}
+                          {(comment as any).like_count > 0 && <span>{(comment as any).like_count}</span>}
+                        </button>
                       </div>
                     </div>
                   </div>
