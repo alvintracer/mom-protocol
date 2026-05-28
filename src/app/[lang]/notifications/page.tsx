@@ -81,15 +81,47 @@ function NotificationsContent() {
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
+      const { data: rawNotifications } = await (supabase as any)
         .from("notifications")
-        .select("*, actor_profile:profiles!notifications_actor_id_fkey(display_name, avatar_url)")
+        .select("*")
         .eq("user_id", userData.user.id)
         .order("created_at", { ascending: false })
         .limit(50);
 
+      if (!mounted || !rawNotifications) {
+        setNotifications([]);
+        setLoading(false);
+        return;
+      }
+
+      // Batch-load actor profiles
+      const actorIds = [...new Set(
+        (rawNotifications as Notification[])
+          .map((n) => n.actor_id)
+          .filter(Boolean) as string[]
+      )];
+
+      let profileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {};
+      if (actorIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .in("id", actorIds);
+        if (profiles) {
+          profileMap = Object.fromEntries(
+            profiles.map((p: { id: string; display_name: string | null; avatar_url: string | null }) => [p.id, p])
+          );
+        }
+      }
+
+      // Merge actor profiles into notifications
+      const enriched = (rawNotifications as Notification[]).map((n) => ({
+        ...n,
+        actor_profile: n.actor_id ? profileMap[n.actor_id] ?? null : null,
+      }));
+
       if (mounted) {
-        setNotifications((data as Notification[]) ?? []);
+        setNotifications(enriched);
         setLoading(false);
       }
     }
