@@ -25,6 +25,7 @@ export type ExploreAttention = {
     color?: string | null;
   } | null;
   resolvedOutcome?: string | null;
+  createdAt?: string | null;
 };
 
 export type ExploreTopic = {

@@ -410,8 +410,8 @@ export default function ExplorePage() {
     });
   }, [attentions, searchTerm, selectedCategory]);
 
-  const breaking = filteredAttentions
-    .sort((a, b) => b.attentionScore - a.attentionScore)
+  const breaking = [...filteredAttentions]
+    .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
     .slice(0, 4);
 
   return (
@@ -497,7 +497,49 @@ export default function ExplorePage() {
           )}
         </section>
 
-        {/* ── Global Prediction Markets ── */}
+        {/* ─── 3. Categories ─── */}
+        <section className="space-y-3">
+          <SectionHeader
+            icon={<RiStackLine className="size-5" />}
+            title={t(dictionary.explore.categories)}
+          />
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {categoryKeys.map((key) => (
+              <button
+                key={key}
+                onClick={() => setSelectedCategory(key)}
+                className={`min-w-fit rounded-full border px-4 py-2 text-sm font-bold transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900/50 ${
+                  selectedCategory === key
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-background text-foreground"
+                }`}
+              >
+                {categoryLabel(key, dictionary, t)}
+              </button>
+            ))}
+          </div>
+          {isLoading ? (
+            <AttentionGridSkeleton />
+          ) : (
+            <div className="grid gap-3 overflow-hidden sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 min-[1750px]:grid-cols-5">
+              {filteredAttentions.map((attention) => (
+                <ExploreAttentionCard key={attention.id} attention={attention} />
+              ))}
+            </div>
+          )}
+          {!isLoading && filteredAttentions.length === 0 ? (
+            <div className="rounded-2xl border border-border bg-background p-6 text-center">
+              <p className="text-sm font-black text-foreground">
+                {t(dictionary.explore.emptyTitle)}
+              </p>
+              <p className="mt-2 text-sm font-semibold text-muted-foreground">
+                {t(dictionary.explore.emptyDescription)}
+              </p>
+            </div>
+          ) : null}
+        </section>
+
+        {/* ─── 4. Global Prediction Markets (bottom) ─── */}
         <section className="space-y-3">
           <SectionHeader
             icon={<RiGlobalLine className="size-5" />}
@@ -507,7 +549,6 @@ export default function ExplorePage() {
 
           {/* Sort + Platform filters */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Sort pills — newest first, then volume, then popular */}
             {(["newest", "volume", "popular"] as const).map((mode) => {
               const icons = { newest: RiSortDesc, volume: RiBarChart2Line, popular: RiStarLine };
               const Icon = icons[mode];
@@ -610,47 +651,6 @@ export default function ExplorePage() {
               </p>
             </div>
           )}
-        </section>
-
-        <section className="space-y-3">
-          <SectionHeader
-            icon={<RiStackLine className="size-5" />}
-            title={t(dictionary.explore.categories)}
-          />
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {categoryKeys.map((key) => (
-              <button
-                key={key}
-                onClick={() => setSelectedCategory(key)}
-                className={`min-w-fit rounded-full border px-4 py-2 text-sm font-bold transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900/50 ${
-                  selectedCategory === key
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border bg-background text-foreground"
-                }`}
-              >
-                {categoryLabel(key, dictionary, t)}
-              </button>
-            ))}
-          </div>
-          {isLoading ? (
-            <AttentionGridSkeleton />
-          ) : (
-            <div className="grid gap-3 overflow-hidden sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 min-[1750px]:grid-cols-5">
-              {filteredAttentions.map((attention) => (
-                <ExploreAttentionCard key={attention.id} attention={attention} />
-              ))}
-            </div>
-          )}
-          {!isLoading && filteredAttentions.length === 0 ? (
-            <div className="rounded-2xl border border-border bg-background p-6 text-center">
-              <p className="text-sm font-black text-foreground">
-                {t(dictionary.explore.emptyTitle)}
-              </p>
-              <p className="mt-2 text-sm font-semibold text-muted-foreground">
-                {t(dictionary.explore.emptyDescription)}
-              </p>
-            </div>
-          ) : null}
         </section>
       </main>
     </div>
@@ -997,6 +997,7 @@ function mapClusterToExploreAttention(
     ruleStatus: sources.some((source) => Boolean(source.rules_text)) ? "ready" : "draft",
     sponsor: sponsor ?? null,
     resolvedOutcome: resolvedOutcome ?? null,
+    createdAt: cluster.created_at ?? null,
   };
 }
 
