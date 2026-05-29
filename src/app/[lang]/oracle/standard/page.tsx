@@ -95,6 +95,7 @@ export default function OracleDashboardPage() {
   const [filter, setFilter] = useState<"all" | "pending" | "finalized" | "rejected">("all");
   const [finalizingIds, setFinalizingIds] = useState<Set<string>>(new Set());
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [showEvidenceFaq, setShowEvidenceFaq] = useState(false);
 
   // Fetch current user
   useEffect(() => {
@@ -423,6 +424,37 @@ export default function OracleDashboardPage() {
         ) : null}
       </section>
 
+      {/* ─── Evidence Source FAQ (Collapsible) ──── */}
+      <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
+        <button
+          type="button"
+          onClick={() => setShowEvidenceFaq((v) => !v)}
+          className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-600">
+              <RiLightbulbLine className="size-5" />
+            </div>
+            <span className="text-[15px] font-black text-foreground">
+              {t(pages.oracleEvidenceFaqTitle)}
+            </span>
+          </div>
+          {showEvidenceFaq ? (
+            <RiArrowUpSLine className="size-5 text-muted-foreground" />
+          ) : (
+            <RiArrowDownSLine className="size-5 text-muted-foreground" />
+          )}
+        </button>
+
+        {showEvidenceFaq ? (
+          <div className="border-t border-border px-5 pb-5 pt-4">
+            <p className="text-sm font-medium leading-6 text-muted-foreground">
+              {t(pages.oracleEvidenceFaqBody)}
+            </p>
+          </div>
+        ) : null}
+      </section>
+
       {/* ─── Verification Cost ────────────────── */}
       <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
         <div className="flex items-center gap-4 px-5 py-4">
@@ -562,8 +594,13 @@ export default function OracleDashboardPage() {
                             <button
                               type="button"
                               onClick={() => handleRunVerification(a.id)}
-                              disabled={verifyingIds.has(a.id)}
+                              disabled={
+                                verifyingIds.has(a.id) ||
+                                currentUserId !== a.proposer_id ||
+                                llmVerifications.length >= 6
+                              }
                               className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-background px-3 text-xs font-black text-foreground transition-colors hover:border-blue-500 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+                              title={currentUserId !== a.proposer_id ? t(pages.oracleRerunLimitNotice) : llmVerifications.length >= 6 ? t(pages.oracleRerunLimitNotice) : undefined}
                             >
                               {verifyingIds.has(a.id) ? (
                                 <RiLoader4Line className="size-4 animate-spin" />
@@ -598,7 +635,7 @@ export default function OracleDashboardPage() {
                         )}
 
                         {/* Resolution */}
-                        {a.finalized_outcome && (
+                        {a.finalized_outcome && a.status !== "rejected" && (
                           <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/5 p-4">
                             <h3 className="text-[13px] font-black text-emerald-700 dark:text-emerald-400">
                               {t(aio.resolution.title)}

@@ -743,21 +743,21 @@ export const dictionary = {
     ),
     oracleWhatIsTitle: text("AIO란 무엇인가요?", "What is AIO?", "¿Que es AIO?"),
     oracleWhatIsBody: text(
-      "AIO(Assertion-evidence-oracle Intelligence)는 momment.의 핵심 검증 엔진입니다. 사용자가 어텐션(이벤트)의 결과를 주장하면, 근거(Evidence)를 캡처하고 다중 AI 모델(Gemini + GPT)이 교차 검증합니다. 의견 불일치 시 xAI Grok이 타이브레이커로 판정합니다.",
-      "AIO (Assertion-evidence-oracle Intelligence) is momment.'s core verification engine. When a user asserts an attention outcome, evidence is captured and cross-verified by multi-LLM (Gemini + GPT). If they disagree, xAI Grok acts as a tie-breaker.",
-      "AIO (Assertion-evidence-oracle Intelligence) es el motor de verificacion central de momment. Cuando un usuario afirma un resultado, la evidencia se captura y se verifica con multi-LLM (Gemini + GPT). Si no coinciden, xAI Grok actua como desempate.",
+      "AIO(Assertion-evidence-oracle Intelligence)는 momment.의 핵심 검증 엔진입니다. 사용자가 어텐션(이벤트)의 결과를 주장하면, 근거(Evidence)를 캡처하고 다중 LLM 노드의 의사합치 과정(2 of 3)를 통해 교차 검증합니다.",
+      "AIO (Assertion-evidence-oracle Intelligence) is momment.'s core verification engine. When a user asserts an attention outcome, evidence is captured and cross-verified through a multi-LLM node consensus process (2 of 3).",
+      "AIO (Assertion-evidence-oracle Intelligence) es el motor de verificación central de momment. Cuando un usuario afirma un resultado, la evidencia se captura y se verifica mediante un proceso de consenso multi-LLM (2 de 3).",
     ),
     oracleFeature1Title: text("다중 AI 교차검증", "Multi-LLM cross-verification", "Verificacion cruzada multi-LLM"),
     oracleFeature1Desc: text(
-      "단일 AI에 의존하지 않습니다. Gemini와 GPT가 동시에 검증하고, 불일치 시 xAI Grok이 판정합니다.",
-      "No single AI dependency. Gemini & GPT verify simultaneously; xAI Grok judges disputes.",
-      "Sin dependencia de una sola IA. Gemini y GPT verifican a la vez; xAI Grok juzga disputas.",
+      "단일 LLM이 아닌 다중 LLM 노드의 의사합치 과정(2 of 3)를 통해 검증합니다.",
+      "Verified through a multi-LLM node consensus process (2 of 3), not relying on a single LLM.",
+      "Verificado mediante un proceso de consenso multi-LLM (2 de 3), sin depender de un solo LLM.",
     ),
     oracleFeature2Title: text("Evidence Lite 캡처", "Evidence Lite capture", "Captura Evidence Lite"),
     oracleFeature2Desc: text(
-      "제출된 URL의 메타데이터, 본문, 해시를 자동 캡처하여 증거를 보존합니다.",
-      "Auto-captures metadata, body text, and hash from submitted URLs to preserve evidence.",
-      "Captura automaticamente metadatos, texto y hash de URLs enviadas para preservar evidencia.",
+      "제출된 근거의 메타데이터, 본문, 해시를 자동으로 캡쳐하고 LLM Statement를 온체인에 기록해 검증 시점(moment)의 오라클을 투명하게 기록합니다.",
+      "Automatically captures metadata, body text, and hash from submitted evidence, and records the LLM Statement on-chain for a transparent oracle record at the moment of verification.",
+      "Captura automáticamente metadatos, texto y hash de la evidencia enviada, y registra el LLM Statement on-chain para un registro de oráculo transparente en el momento de la verificación.",
     ),
     oracleFeature3Title: text("출처 신뢰성 검증", "Source credibility check", "Verificación de credibilidad"),
     oracleFeature3Desc: text(
@@ -791,6 +791,21 @@ export const dictionary = {
     oracleStatsTotal: text("총 검증", "Total verified", "Total verificados"),
     oracleStatsPending: text("검증 대기", "Pending", "Pendientes"),
     oracleStatsFinalized: text("확정", "Finalized", "Finalizados"),
+    oracleEvidenceFaqTitle: text(
+      "근거 (Evidence Source)로는 무엇이 가능한가요?",
+      "What qualifies as Evidence Source?",
+      "¿Qué califica como fuente de evidencia?",
+    ),
+    oracleEvidenceFaqBody: text(
+      "언론사의 기사, 어텐션의 결과와 연관된 공식기관의 발표 등 반드시 서피스웹에 공표된 정보만 근거로 인정됩니다. 공표 주체의 신뢰도를 바탕으로 멀티 LLM이 가중치를 부여하여 판단합니다.",
+      "Only information published on the surface web qualifies — such as news articles and official announcements from institutions relevant to the attention's outcome. Multi-LLM assigns trust weights based on the credibility of the publishing entity.",
+      "Solo se acepta información publicada en la web superficial, como artículos de prensa y anuncios oficiales de instituciones relevantes. Multi-LLM asigna pesos de confianza según la credibilidad de la entidad publicadora.",
+    ),
+    oracleRerunLimitNotice: text(
+      "재검증은 검증 제출자만 최대 1회 실행할 수 있습니다.",
+      "Only the original submitter can rerun verification, up to 1 time.",
+      "Solo el autor original puede reejecutar la verificación, hasta 1 vez.",
+    ),
   },
   vault: {
     title: text("이번 달 momment vault", "This month's momment vault", "momment vault de este mes"),

@@ -39,6 +39,7 @@ type LlmVerification = {
   verdict: Verdict;
   confidence: number;
   reasoning_summary: string | null;
+  created_at?: string;
 };
 
 type EvidenceItem = {
@@ -184,6 +185,7 @@ export function AioEvidenceList({ items }: { items: EvidenceItem[] }) {
 export function AioLlmResults({ verifications }: { verifications: LlmVerification[] }) {
   const { dictionary, t } = useI18n();
   const l = dictionary.aio.llm;
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   if (verifications.length === 0) {
     return (
@@ -202,16 +204,31 @@ export function AioLlmResults({ verifications }: { verifications: LlmVerificatio
     insufficient_evidence: { color: "text-zinc-600 bg-zinc-500/10", label: t(l.insufficientEvidence) },
   };
 
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-2">
       {verifications.map((v) => {
         const vc = verdictConfig[v.verdict];
+        const isExpanded = expandedIds.has(v.id);
         return (
           <div key={v.id} className="rounded-xl border border-border/60 bg-zinc-50/50 p-3 dark:bg-zinc-900/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-black text-muted-foreground">{v.provider}</span>
                 <span className="text-[11px] font-medium text-muted-foreground">{v.model_id}</span>
+                {v.created_at && (
+                  <span className="text-[10px] font-medium text-muted-foreground/60">
+                    {new Date(v.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
               </div>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${vc.color}`}>
                 {vc.label}
@@ -224,12 +241,31 @@ export function AioLlmResults({ verifications }: { verifications: LlmVerificatio
                   {v.confidence.toFixed(0)}%
                 </span>
               </div>
-              {v.reasoning_summary && (
-                <p className="flex-1 truncate text-[11px] font-medium text-muted-foreground">
+              {v.reasoning_summary && !isExpanded && (
+                <p
+                  className="flex-1 truncate text-[11px] font-medium text-muted-foreground cursor-pointer hover:text-foreground"
+                  onClick={() => toggleExpand(v.id)}
+                >
                   {v.reasoning_summary}
                 </p>
               )}
+              {v.reasoning_summary && (
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(v.id)}
+                  className="shrink-0 text-[10px] font-bold text-blue-600 hover:underline"
+                >
+                  {isExpanded ? "▲" : "▼"}
+                </button>
+              )}
             </div>
+            {v.reasoning_summary && isExpanded && (
+              <div className="mt-2 rounded-lg bg-zinc-100/80 p-2.5 dark:bg-zinc-800/50">
+                <p className="text-[11px] font-medium leading-5 text-foreground whitespace-pre-wrap">
+                  {v.reasoning_summary}
+                </p>
+              </div>
+            )}
           </div>
         );
       })}
